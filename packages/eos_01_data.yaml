@@ -314,6 +314,29 @@ template:
         state: >
           {{ states('sensor.openquatt_cwt_ch1_dhw_tank_top') | float(0) | round(1) }}
 
+      # ─── Grid cumulatief kWh (rechtstreeks van slimme meter) ─
+      # P1 DSMR levert hardware-tellers die nooit resetten → utility_meter
+      # werkt correct zonder 5-min accumulatie-hack.
+      - name: "eos_grid_import_cumulative_kwh"
+        unique_id: eos_grid_import_cumulative_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        icon: mdi:transmission-tower-import
+        state: >
+          {{ (states('sensor.esp32_s3_zero_p1_energie_verbruik_tarief_1') | float(0) +
+              states('sensor.esp32_s3_zero_p1_energie_verbruik_tarief_2') | float(0)) | round(3) }}
+
+      - name: "eos_grid_export_cumulative_kwh"
+        unique_id: eos_grid_export_cumulative_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        icon: mdi:transmission-tower-export
+        state: >
+          {{ (states('sensor.esp32_s3_zero_p1_energie_teruglevering_tarief_1') | float(0) +
+              states('sensor.esp32_s3_zero_p1_energie_teruglevering_tarief_2') | float(0)) | round(3) }}
+
   - binary_sensor:
       - name: "eos_solar_active"
         unique_id: eos_solar_active
@@ -392,28 +415,6 @@ template:
       - platform: time_pattern
         minutes: "/5"
     sensor:
-      - name: "eos_grid_import_cumulative_kwh"
-        unique_id: eos_grid_import_cumulative_kwh
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total_increasing
-        icon: mdi:transmission-tower-import
-        state: >
-          {% set last  = states('sensor.eos_grid_import_cumulative_kwh') | float(0) %}
-          {% set power = states('sensor.eos_grid_import_power_w') | float(0) %}
-          {{ [last + power / 12000, last] | max | round(4) }}
-
-      - name: "eos_grid_export_cumulative_kwh"
-        unique_id: eos_grid_export_cumulative_kwh
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total_increasing
-        icon: mdi:transmission-tower-export
-        state: >
-          {% set last  = states('sensor.eos_grid_export_cumulative_kwh') | float(0) %}
-          {% set power = states('sensor.eos_grid_export_power_w') | float(0) %}
-          {{ [last + power / 12000, last] | max | round(4) }}
-
       - name: "eos_battery_charge_cumulative_kwh"
         unique_id: eos_battery_charge_cumulative_kwh
         unit_of_measurement: "kWh"
