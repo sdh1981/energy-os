@@ -15,19 +15,13 @@ script:
   # ── Fase auto-detectie ─────────────────────────────────
   # Laadt elke batterij (M1, M2, M3) afzonderlijk op 1000W
   # en kijkt welke P1-fase het meeste verandert.
-  # Sla resultaat op in input_select.eos_battery_m?_phase.
-  #
-  # VEREIST: EOS Phase Detect Batterij select op T-Connect.
-  # Pas de entity_id aan naar jouw device-naam:
-  #   select.JOUW_DEVICE_eos_phase_detect_batterij
   eos_phase_detect:
     alias: "EOS: Fase auto-detectie"
     mode: single
     sequence:
       - variables:
           prev_mode: "{{ states('input_select.energy_os_mode') }}"
-          pd_entity: "select.t_connect_eos_phase_detect_batterij"
-          # ↑ Pas aan naar jouw T-Connect entity naam!
+          pd_entity: "select.marstek_3x_eos_phase_detect_batterij"
 
       - service: input_boolean.turn_on
         target: {entity_id: input_boolean.eos_phase_detect_running}
