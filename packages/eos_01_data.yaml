@@ -29,6 +29,53 @@ template:
         icon: mdi:transmission-tower
         # Positief = import (huis trekt van net), negatief = export
 
+      # ─── Per-fase vermogen (netto, signed: + = import) ───
+      - name: "eos_grid_power_l1_w"
+        unique_id: eos_grid_power_l1_w
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.esp32_s3_zero_p1_netto_vermogen_l1_watt') | float(0) | round(0) }}"
+        icon: mdi:numeric-1-circle-outline
+
+      - name: "eos_grid_power_l2_w"
+        unique_id: eos_grid_power_l2_w
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.esp32_s3_zero_p1_netto_vermogen_l2_watt') | float(0) | round(0) }}"
+        icon: mdi:numeric-2-circle-outline
+
+      - name: "eos_grid_power_l3_w"
+        unique_id: eos_grid_power_l3_w
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.esp32_s3_zero_p1_netto_vermogen_l3_watt') | float(0) | round(0) }}"
+        icon: mdi:numeric-3-circle-outline
+
+      # ─── Per-fase over-limit binary sensor ───────────────
+      - name: "eos_grid_l1_over_limit"
+        unique_id: eos_grid_l1_over_limit
+        state: >
+          {{ states('sensor.eos_grid_power_l1_w') | float(0) >
+             states('input_number.eos_grid_phase_limit_w') | float(5500) }}
+        icon: mdi:alert-circle
+
+      - name: "eos_grid_l2_over_limit"
+        unique_id: eos_grid_l2_over_limit
+        state: >
+          {{ states('sensor.eos_grid_power_l2_w') | float(0) >
+             states('input_number.eos_grid_phase_limit_w') | float(5500) }}
+        icon: mdi:alert-circle
+
+      - name: "eos_grid_l3_over_limit"
+        unique_id: eos_grid_l3_over_limit
+        state: >
+          {{ states('sensor.eos_grid_power_l3_w') | float(0) >
+             states('input_number.eos_grid_phase_limit_w') | float(5500) }}
+        icon: mdi:alert-circle
+
       - name: "eos_battery_power_w"
         unique_id: eos_battery_power_w
         unit_of_measurement: "W"
@@ -306,13 +353,13 @@ template:
         unique_id: eos_grid_over_soft
         state: >
           {{ states('sensor.eos_grid_power_w') | float(0) >
-             states('input_number.eos_grid_soft_limit_w') | float(3500) }}
+             states('input_number.eos_grid_soft_limit_w') | float(13000) }}
 
       - name: "eos_grid_over_hard"
         unique_id: eos_grid_over_hard
         state: >
           {{ states('sensor.eos_grid_power_w') | float(0) >
-             states('input_number.eos_grid_hard_limit_w') | float(5500) }}
+             states('input_number.eos_grid_hard_limit_w') | float(16000) }}
 
       # ─── EV beveiliging ─────────────────────────────────
       # Detecteert of de auto aan de lader staat via Zonneplan/laadpaal-entiteit.

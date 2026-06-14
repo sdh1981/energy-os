@@ -89,6 +89,12 @@ input_boolean:
     initial: false
     # AAN → berekent duurste N-uurs venster in 24h forecast en plant Sell modus
 
+  # ─── Fase auto-detectie status ───────────────────────────
+  eos_phase_detect_running:
+    name: "Fase detectie actief"
+    icon: mdi:antenna
+    initial: false
+
   # ─── M13: SoH cyclus tracking ────────────────────────────
   eos_battery_soh_cycle_active:
     name: "SoH cyclus meting actief"
@@ -155,6 +161,25 @@ input_select:
       - Full stop
     initial: Self-consumption
     icon: mdi:calendar-arrow-right
+
+  # ─── Batterij fase-toewijzing ────────────────────────────
+  eos_battery_m1_phase:
+    name: "Batterij M1 — fase"
+    options: [L1, L2, L3, Onbekend]
+    initial: Onbekend
+    icon: mdi:numeric-1-circle
+
+  eos_battery_m2_phase:
+    name: "Batterij M2 — fase"
+    options: [L1, L2, L3, Onbekend]
+    initial: Onbekend
+    icon: mdi:numeric-2-circle
+
+  eos_battery_m3_phase:
+    name: "Batterij M3 — fase"
+    options: [L1, L2, L3, Onbekend]
+    initial: Onbekend
+    icon: mdi:numeric-3-circle
 
   energy_os_profile:
     name: "Energy OS Profiel"
@@ -259,23 +284,35 @@ input_number:
     icon: mdi:arrow-up-bold-circle
     # 25% = 6 van 24 uur zijn duur (bovenste kwart)
 
-  eos_grid_soft_limit_w:
-    name: "Grid soft limit"
-    min: 500
-    max: 8000
-    step: 100
-    unit_of_measurement: "W"
-    initial: 3500
-    mode: box
-
-  eos_grid_hard_limit_w:
-    name: "Grid hard limit"
+  eos_grid_phase_limit_w:
+    name: "Grid per-fase limiet"
     min: 1000
-    max: 12000
+    max: 6000
     step: 100
     unit_of_measurement: "W"
     initial: 5500
     mode: box
+    # 3×25A: max 5.750W per fase (25A × 230V). Default 5.500W = ~95%.
+
+  eos_grid_soft_limit_w:
+    name: "Grid soft limit"
+    min: 500
+    max: 20000
+    step: 100
+    unit_of_measurement: "W"
+    initial: 13000
+    mode: box
+    # 3×25A aansluiting: max 17.250W — soft = ~75% als waarschuwingsdrempel
+
+  eos_grid_hard_limit_w:
+    name: "Grid hard limit"
+    min: 1000
+    max: 20000
+    step: 100
+    unit_of_measurement: "W"
+    initial: 16000
+    mode: box
+    # 3×25A aansluiting: max 17.250W — hard = ~93% om zekeringen te beschermen
 
   eos_hp_cap_override:
     name: "HP cap override (0..20)"

@@ -92,6 +92,19 @@ select:
       sorting_weight: 31
 
   - platform: template
+    name: "EOS Phase Detect Batterij"
+    id: eos_drv_phase_detect_bat
+    icon: mdi:antenna
+    optimistic: true
+    restore_value: false
+    options: [Uit, M1, M2, M3]
+    initial_option: Uit
+    entity_category: config
+    web_server:
+      sorting_group_id: Control
+      sorting_weight: 29
+
+  - platform: template
     name: "EOS Driver Distribution"
     id: eos_drv_distribution
     icon: mdi:scale-balance
@@ -369,7 +382,43 @@ interval:
           }
 
           // ──────────────────────────────────────────────
-          // 3) Commando uitvoeren
+          // 3A) Fase-detectie override
+          // Laat één batterij laden op 1000W, anderen op 0W.
+          // HA-script leest P1 per-fase delta om fase te bepalen.
+          // ──────────────────────────────────────────────
+          {
+            const std::string pd = id(eos_drv_phase_detect_bat).current_option();
+            if (pd != "Uit") {
+              const int pd_w = 1000;
+              set_rs485(id(m1_rs485_control_mode), "enable");
+              set_rs485(id(m2_rs485_control_mode), "enable");
+              set_rs485(id(m3_rs485_control_mode), "enable");
+              set_work_mode(id(m1_user_work_mode), "anti-feed");
+              set_work_mode(id(m2_user_work_mode), "anti-feed");
+              set_work_mode(id(m3_user_work_mode), "anti-feed");
+              int pd1 = (pd == "M1") ? pd_w : 0;
+              int pd2 = (pd == "M2") ? pd_w : 0;
+              int pd3 = (pd == "M3") ? pd_w : 0;
+              set_forcible(id(m1_forcible_charge_discharge), "charge");
+              set_power(id(m1_forcible_charge_power), pd1);
+              set_forcible(id(m2_forcible_charge_discharge), "charge");
+              set_power(id(m2_forcible_charge_power), pd2);
+              set_forcible(id(m3_forcible_charge_discharge), "charge");
+              set_power(id(m3_forcible_charge_power), pd3);
+              id(eos_drv_applied_m1_w) = pd1;
+              id(eos_drv_applied_m2_w) = pd2;
+              id(eos_drv_applied_m3_w) = pd3;
+              id(eos_drv_applied_total_w) = pd_w;
+              id(eos_drv_last_cmd_ms) = now_ms; // reset watchdog
+              char pd_buf[80];
+              snprintf(pd_buf, sizeof(pd_buf), "FASE DETECT: %s @ %dW", pd.c_str(), pd_w);
+              id(eos_drv_state_text).publish_state(pd_buf);
+              return;
+            }
+          }
+
+          // ──────────────────────────────────────────────
+          // 3B) Commando uitvoeren
           // ──────────────────────────────────────────────
           const int max_per_batt = (int)${eos_drv_max_per_batt_w};
           int m1_w = 0, m2_w = 0, m3_w = 0;

@@ -294,7 +294,7 @@ interval:
           const float tariff   = val_or(id(eos_ha_tariff_eur_kwh),  0.20f);
           const float cheap    = val_or(id(eos_ha_tariff_cheap),    0.10f);
           const float expensv  = val_or(id(eos_ha_tariff_expensive),0.28f);
-          const float hard_lim = val_or(id(eos_ha_grid_hard_limit_w), 5500.0f);
+          const float hard_lim = val_or(id(eos_ha_grid_hard_limit_w), 16000.0f); // 3×25A aansluiting
           const float soc_min  = val_or(id(eos_ha_min_soc), (float)${eos_str_soc_safety_floor});
           const float charge_target_soc = val_or(id(eos_ha_charge_target_soc), 100.0f);
 

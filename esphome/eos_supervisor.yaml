@@ -131,6 +131,22 @@ sensor:
     entity_id: input_number.eos_grid_hard_limit_w
 
   - platform: homeassistant
+    id: eos_ha_grid_phase_limit_w
+    entity_id: input_number.eos_grid_phase_limit_w
+
+  - platform: homeassistant
+    id: eos_ha_grid_power_l1_w
+    entity_id: sensor.eos_grid_power_l1_w
+
+  - platform: homeassistant
+    id: eos_ha_grid_power_l2_w
+    entity_id: sensor.eos_grid_power_l2_w
+
+  - platform: homeassistant
+    id: eos_ha_grid_power_l3_w
+    entity_id: sensor.eos_grid_power_l3_w
+
+  - platform: homeassistant
     id: eos_ha_tariff_cheap
     entity_id: input_number.eos_tariff_cheap
 
@@ -167,6 +183,19 @@ text_sensor:
     id: eos_ha_dynamic2_level
     entity_id: sensor.eos_dynamic2_period_type
     # "goedkoop" / "duur" / "normaal" — pair-matching via Zonneplan 24h forecast
+
+  # ─── Fase toewijzing batterijen ─────────────────────────
+  - platform: homeassistant
+    id: eos_ha_battery_m1_phase
+    entity_id: input_select.eos_battery_m1_phase
+
+  - platform: homeassistant
+    id: eos_ha_battery_m2_phase
+    entity_id: input_select.eos_battery_m2_phase
+
+  - platform: homeassistant
+    id: eos_ha_battery_m3_phase
+    entity_id: input_select.eos_battery_m3_phase
 
   # ─── Eigen outputs (lokale UI + HA mirror) ──────────────
   - platform: template

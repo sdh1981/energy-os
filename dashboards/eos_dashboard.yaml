@@ -607,8 +607,50 @@ views:
             name: "Soft limit (W)"
           - entity: input_number.eos_grid_hard_limit_w
             name: "Hard limit (W) — peak shave"
+          - entity: input_number.eos_grid_phase_limit_w
+            name: "Per-fase limiet (W) — 3×25A"
           - entity: input_boolean.eos_peak_shave_in_manual
             name: "Peak shave opt-in in Handmatig/Timed"
+
+      # ── Per-fase monitoring ──────────────────────────────
+      - type: entities
+        title: "Per-fase vermogen"
+        entities:
+          - entity: sensor.eos_grid_power_l1_w
+            name: "L1 vermogen"
+            secondary_info: last-updated
+          - entity: sensor.eos_grid_power_l2_w
+            name: "L2 vermogen"
+            secondary_info: last-updated
+          - entity: sensor.eos_grid_power_l3_w
+            name: "L3 vermogen"
+            secondary_info: last-updated
+          - type: divider
+          - entity: binary_sensor.eos_grid_l1_over_limit
+            name: "L1 over limiet"
+          - entity: binary_sensor.eos_grid_l2_over_limit
+            name: "L2 over limiet"
+          - entity: binary_sensor.eos_grid_l3_over_limit
+            name: "L3 over limiet"
+
+      # ── Batterij fase-toewijzing ─────────────────────────
+      - type: entities
+        title: "Batterij fase-toewijzing"
+        entities:
+          - entity: input_select.eos_battery_m1_phase
+            name: "M1 fase"
+          - entity: input_select.eos_battery_m2_phase
+            name: "M2 fase"
+          - entity: input_select.eos_battery_m3_phase
+            name: "M3 fase"
+          - type: divider
+          - entity: input_boolean.eos_phase_detect_running
+            name: "Detectie actief"
+          - type: button
+            name: "Start fase-detectie"
+            tap_action:
+              action: call-service
+              service: script.eos_phase_detect
 
       # ── Batterij instellingen ───────────────────────────
       - type: entities
