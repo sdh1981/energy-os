@@ -21,7 +21,7 @@ script:
     sequence:
       - variables:
           prev_mode: "{{ states('input_select.energy_os_mode') }}"
-          pd_entity: "select.marstek_3x_eos_phase_detect_batterij"
+          pd_entity: "select.schuur_marstek_3x_eos_phase_detect_batterij"
 
       - service: input_boolean.turn_on
         target: {entity_id: input_boolean.eos_phase_detect_running}
