@@ -18,7 +18,7 @@ http_request:
   timeout: 5s
 
 interval:
-  - interval: 5s
+  - interval: 1s
     then:
       - http_request.get:
           url: "http://192.168.1.16/api/v1/data"
@@ -27,7 +27,14 @@ interval:
             then:
               - lambda: |-
                   if (response->status_code != 200) return;
-                  json::parse_json(response->get_string(), [](JsonObject root) -> bool {
+                  std::string body;
+                  char buf[512];
+                  int len;
+                  while ((len = response->read((uint8_t *)buf, sizeof(buf) - 1)) > 0) {
+                    buf[len] = '\0';
+                    body += buf;
+                  }
+                  json::parse_json(body, [](JsonObject root) -> bool {
                     // Sub-verdeling totaal
                     id(hw_subpanel_power_w).publish_state(root["active_power_w"] | 0.0f);
 
