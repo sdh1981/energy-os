@@ -22,11 +22,12 @@ interval:
     then:
       - http_request.get:
           url: "http://192.168.1.16/api/v1/data"
+          capture_response: true
           on_response:
             then:
               - lambda: |-
                   if (response->status_code != 200) return;
-                  json::parse_json(body, [](JsonObject root) -> bool {
+                  json::parse_json(response->get_string(), [](JsonObject root) -> bool {
                     // Sub-verdeling totaal
                     id(hw_subpanel_power_w).publish_state(root["active_power_w"] | 0.0f);
 
