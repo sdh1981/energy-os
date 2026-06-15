@@ -3,12 +3,12 @@
 # IP:    192.168.1.16  |  Poll: elke 5 s
 #
 # Sub-verdeling layout:
-#   L1 = zonnepanelen
+#   L1 = batterij (sub-fase)
 #   L2 = batterij (sub-fase)
-#   L3 = batterij (sub-fase)
+#   L3 = zonnepanelen
 #
 # Teken-conventie (HomeWizard): negatief = levering aan net/huis
-#   Solar produceert → L1 negatief
+#   Solar produceert → L3 negatief
 #   Batterij ontlaadt → negatief
 #   Batterij laadt    → positief
 # ============================================================
@@ -28,20 +28,20 @@ interval:
                     // Sub-verdeling totaal
                     id(hw_subpanel_power_w).publish_state(root["active_power_w"] | 0.0f);
 
-                    // L1 = zonnepanelen (negatief = productie)
-                    id(hw_solar_power_w).publish_state(root["active_power_l1_w"] | 0.0f);
-                    id(hw_solar_current_a).publish_state(root["active_current_l1_a"] | 0.0f);
-                    id(hw_solar_voltage_v).publish_state(root["active_voltage_l1_v"] | 0.0f);
+                    // L1 = batterij (negatief = ontladen, positief = laden)
+                    id(hw_bat_l1_power_w).publish_state(root["active_power_l1_w"] | 0.0f);
+                    id(hw_bat_l1_current_a).publish_state(root["active_current_l1_a"] | 0.0f);
+                    id(hw_bat_l1_voltage_v).publish_state(root["active_voltage_l1_v"] | 0.0f);
 
                     // L2 = batterij (negatief = ontladen, positief = laden)
                     id(hw_bat_l2_power_w).publish_state(root["active_power_l2_w"] | 0.0f);
                     id(hw_bat_l2_current_a).publish_state(root["active_current_l2_a"] | 0.0f);
                     id(hw_bat_l2_voltage_v).publish_state(root["active_voltage_l2_v"] | 0.0f);
 
-                    // L3 = batterij (negatief = ontladen, positief = laden)
-                    id(hw_bat_l3_power_w).publish_state(root["active_power_l3_w"] | 0.0f);
-                    id(hw_bat_l3_current_a).publish_state(root["active_current_l3_a"] | 0.0f);
-                    id(hw_bat_l3_voltage_v).publish_state(root["active_voltage_l3_v"] | 0.0f);
+                    // L3 = zonnepanelen (negatief = productie)
+                    id(hw_solar_power_w).publish_state(root["active_power_l3_w"] | 0.0f);
+                    id(hw_solar_current_a).publish_state(root["active_current_l3_a"] | 0.0f);
+                    id(hw_solar_voltage_v).publish_state(root["active_voltage_l3_v"] | 0.0f);
 
                     // Cumulatieve tellers (totaal sub-verdeling: solar + batterijen)
                     id(hw_subpanel_import_kwh).publish_state(root["total_power_import_kwh"] | 0.0f);
@@ -65,22 +65,22 @@ sensor:
       sorting_group_id: Status
       sorting_weight: 10
 
-  # ── L1 — Zonnepanelen ─────────────────────────────────────
+  # ── L1 — Batterij ─────────────────────────────────────────
   - platform: template
-    name: "HW Solar Power W"
-    id: hw_solar_power_w
+    name: "HW Bat L1 Power W"
+    id: hw_bat_l1_power_w
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
     accuracy_decimals: 0
-    icon: mdi:solar-power
+    icon: mdi:battery-charging
     web_server:
       sorting_group_id: Status
       sorting_weight: 11
 
   - platform: template
-    name: "HW Solar Current A"
-    id: hw_solar_current_a
+    name: "HW Bat L1 Current A"
+    id: hw_bat_l1_current_a
     unit_of_measurement: "A"
     device_class: current
     state_class: measurement
@@ -88,8 +88,8 @@ sensor:
     entity_category: diagnostic
 
   - platform: template
-    name: "HW Solar Voltage V"
-    id: hw_solar_voltage_v
+    name: "HW Bat L1 Voltage V"
+    id: hw_bat_l1_voltage_v
     unit_of_measurement: "V"
     device_class: voltage
     state_class: measurement
@@ -127,22 +127,22 @@ sensor:
     accuracy_decimals: 1
     entity_category: diagnostic
 
-  # ── L3 — Batterij ─────────────────────────────────────────
+  # ── L3 — Zonnepanelen ─────────────────────────────────────
   - platform: template
-    name: "HW Bat L3 Power W"
-    id: hw_bat_l3_power_w
+    name: "HW Solar Power W"
+    id: hw_solar_power_w
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
     accuracy_decimals: 0
-    icon: mdi:battery-charging
+    icon: mdi:solar-power
     web_server:
       sorting_group_id: Status
       sorting_weight: 13
 
   - platform: template
-    name: "HW Bat L3 Current A"
-    id: hw_bat_l3_current_a
+    name: "HW Solar Current A"
+    id: hw_solar_current_a
     unit_of_measurement: "A"
     device_class: current
     state_class: measurement
@@ -150,8 +150,8 @@ sensor:
     entity_category: diagnostic
 
   - platform: template
-    name: "HW Bat L3 Voltage V"
-    id: hw_bat_l3_voltage_v
+    name: "HW Solar Voltage V"
+    id: hw_solar_voltage_v
     unit_of_measurement: "V"
     device_class: voltage
     state_class: measurement
