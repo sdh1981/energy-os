@@ -58,6 +58,22 @@ warmtepomp + batterij + grid samen aan op basis van metingen en forecasts.
 | ESP32-S3 P1 meter | Netto grid power (sensor.esp32_s3_zero_p1_netto_vermogen_watt) |
 | Zonneplan integratie | `sensor.zonneplan_current_electricity_tariff` + forecast attributen |
 
+### Optioneel — quatt_stooklijn
+
+De [quatt_stooklijn](https://github.com/Appesteijn) HA custom component verrijkt
+Energy OS met een gemeten thermisch model van het huis. Niet vereist — zonder de
+component vallen alle onderstaande punten terug op de bestaande heuristiek.
+
+| Levert | Gebruikt in |
+|---|---|
+| `sensor.quatt_warmteanalyse_veilige_uitlooptijd` — veilige uitlooptijd (min) tot de comfort-vloer, incl. zon-forecast | **Comfort-guard** op de dure-tarief throttle (dispatcher) + `eos_asset_hp_can_defer_min` |
+| `sensor.quatt_warmteanalyse_geschatte_actuele_cop` — gemeten COP | `eos_asset_hp_cop_estimate` (vervangt Carnot-heuristiek) |
+
+Met de comfort-guard knijpt Energy OS bij een duur tarief de warmtepomp alléén
+zolang het huis veilig kan uitlopen op zijn thermische massa — instelbaar via
+`input_number.eos_comfort_coast_margin_min`. Een zonnige middag (zon-forecast)
+verlengt automatisch hoe lang de WP geknepen mag blijven.
+
 ## Installatie
 
 Zie [INSTALLATIE.md](INSTALLATIE.md).

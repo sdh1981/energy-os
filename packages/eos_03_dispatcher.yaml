@@ -298,14 +298,27 @@ automation:
                     state: "on"
                 then:
                   - variables:
+                      # Comfort-guard (optioneel — vereist quatt_stooklijn):
+                      # bij een duur tarief de WP alleen knijpen zolang het huis
+                      # veilig kan uitlopen op zijn thermische massa. De coast-time
+                      # sensor weegt de zon-forecast mee (zon → langer uitlopen).
+                      # Zonder quatt_stooklijn is coast = -1 → comfort_ok = waar →
+                      # exact het oorspronkelijke gedrag (geen nieuwe dependency).
                       desired_cap: >
+                        {% set coast = states('sensor.quatt_warmteanalyse_veilige_uitlooptijd') | float(-1) %}
+                        {% set margin = states('input_number.eos_comfort_coast_margin_min') | float(45) %}
+                        {% set comfort_ok = (coast < 0) or (coast > margin) %}
                         {% if grid > hard_lim %}{{ hp_peak }}
-                        {% elif level == 'duur' and not bat_low %}{{ hp_sell }}
+                        {% elif level == 'duur' and not bat_low and comfort_ok %}{{ hp_sell }}
                         {% elif level == 'goedkoop' %}{{ hp_charge }}
                         {% else %}{{ hp_full }}{% endif %}
                       reason_text: >
+                        {% set coast = states('sensor.quatt_warmteanalyse_veilige_uitlooptijd') | float(-1) %}
+                        {% set margin = states('input_number.eos_comfort_coast_margin_min') | float(45) %}
+                        {% set comfort_ok = (coast < 0) or (coast > margin) %}
                         {% if grid > hard_lim %}Grid {{ grid | int }}W boven limit → HP throttle
-                        {% elif level == 'duur' and not bat_low %}Tarief duur, ESP ontlaadt → HP throttle {{ hp_sell }}
+                        {% elif level == 'duur' and not bat_low and comfort_ok %}Tarief duur, ESP ontlaadt → HP throttle {{ hp_sell }}{% if coast >= 0 %} (coast {{ coast | int }}min){% endif %}
+                        {% elif level == 'duur' and not bat_low and not comfort_ok %}Tarief duur, maar huis koelt te ver af (coast {{ coast | int }}min ≤ {{ margin | int }}min) → HP vrij voor comfort
                         {% elif level == 'goedkoop' %}Tarief goedkoop, ESP laadt → HP throttle {{ hp_charge }}
                         {% else %}Tarief normaal → HP vrij{% endif %}
                   - service: script.eos_apply_hp_cap
