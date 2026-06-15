@@ -447,28 +447,28 @@ views:
       - type: entities
         title: "KPI's vandaag"
         entities:
-          - entity: sensor.eos_today_grid_import_kwh
+          - entity: sensor.eos_today_grid_import_meter
             name: "Grid import"
-          - entity: sensor.eos_today_grid_export_kwh
+          - entity: sensor.eos_today_grid_export_meter
             name: "Grid export"
           - entity: sensor.eos_kpi_self_consumption_pct
             name: "Zelfverbruik %"
-          - entity: sensor.eos_today_battery_charge_kwh
+          - entity: sensor.eos_today_battery_charge_meter
             name: "Batterij geladen"
             icon: mdi:battery-arrow-down-outline
-          - entity: sensor.eos_today_battery_discharge_kwh
+          - entity: sensor.eos_today_battery_discharge_meter
             name: "Batterij ontladen"
             icon: mdi:battery-arrow-up-outline
           - type: divider
-          - entity: sensor.eos_today_grid_import_cost_eur
+          - entity: sensor.eos_today_grid_import_cost_meter
             name: "Importkosten"
-          - entity: sensor.eos_today_grid_export_revenue_eur
+          - entity: sensor.eos_today_grid_export_revenue_meter
             name: "Exportopbrengst"
           - entity: sensor.eos_today_net_energy_cost_eur
             name: "Netto energiekosten"
           - entity: sensor.eos_arbitrage_savings_today_eur
             name: "Arbitrage besparing (schatting)"
-          - entity: sensor.eos_today_solar_kwh
+          - entity: sensor.eos_today_solar_production_meter
             name: "Zonproductie"
             icon: mdi:solar-power
           - entity: sensor.eos_today_house_consumption_kwh
@@ -479,26 +479,26 @@ views:
       - type: entities
         title: "KPI's deze maand"
         entities:
-          - entity: sensor.eos_month_solar_kwh
+          - entity: sensor.eos_month_solar_production_meter
             name: "Zonproductie"
             icon: mdi:solar-power
-          - entity: sensor.eos_month_grid_import_kwh
+          - entity: sensor.eos_month_grid_import_kwh_meter
             name: "Grid import"
-          - entity: sensor.eos_month_grid_export_kwh
+          - entity: sensor.eos_month_grid_export_kwh_meter
             name: "Grid export"
-          - entity: sensor.eos_month_battery_charge_kwh
+          - entity: sensor.eos_month_battery_charge_kwh_meter
             name: "Batterij geladen"
             icon: mdi:battery-arrow-down-outline
-          - entity: sensor.eos_month_battery_discharge_kwh
+          - entity: sensor.eos_month_battery_discharge_kwh_meter
             name: "Batterij ontladen"
             icon: mdi:battery-arrow-up-outline
           - entity: sensor.eos_battery_equiv_full_cycles_month
             name: "Volle cycli (equiv.)"
             icon: mdi:battery-sync
           - type: divider
-          - entity: sensor.eos_month_grid_import_cost_eur
+          - entity: sensor.eos_month_grid_import_cost_meter
             name: "Importkosten"
-          - entity: sensor.eos_month_grid_export_revenue_eur
+          - entity: sensor.eos_month_grid_export_revenue_meter
             name: "Exportopbrengst"
           - entity: sensor.eos_month_net_energy_cost_eur
             name: "Netto energiekosten"
@@ -509,35 +509,35 @@ views:
         unit_of_measurement: kWh
         sections:
           - entities:
-              - entity_id: sensor.eos_today_solar_kwh
+              - entity_id: sensor.eos_today_solar_production_meter
                 label: "Zon"
                 color: "#f5b400"
-              - entity_id: sensor.eos_today_grid_import_kwh
+              - entity_id: sensor.eos_today_grid_import_meter
                 label: "Net import"
                 color: "#e74c3c"
-              - entity_id: sensor.eos_today_battery_discharge_kwh
+              - entity_id: sensor.eos_today_battery_discharge_meter
                 label: "Batt uit"
                 color: "#3498db"
           - entities:
               - entity_id: sensor.eos_today_house_consumption_kwh
                 label: "Huis"
                 color: "#2ecc71"
-              - entity_id: sensor.eos_today_battery_charge_kwh
+              - entity_id: sensor.eos_today_battery_charge_meter
                 label: "Batt in"
                 color: "#3498db"
-              - entity_id: sensor.eos_today_grid_export_kwh
+              - entity_id: sensor.eos_today_grid_export_meter
                 label: "Net export"
                 color: "#9b59b6"
         connections:
-          - source: sensor.eos_today_solar_kwh
+          - source: sensor.eos_today_solar_production_meter
             targets:
               - sensor.eos_today_house_consumption_kwh
-              - sensor.eos_today_battery_charge_kwh
-              - sensor.eos_today_grid_export_kwh
-          - source: sensor.eos_today_grid_import_kwh
+              - sensor.eos_today_battery_charge_meter
+              - sensor.eos_today_grid_export_meter
+          - source: sensor.eos_today_grid_import_meter
             targets:
               - sensor.eos_today_house_consumption_kwh
-          - source: sensor.eos_today_battery_discharge_kwh
+          - source: sensor.eos_today_battery_discharge_meter
             targets:
               - sensor.eos_today_house_consumption_kwh
 
