@@ -59,33 +59,38 @@ warmtepomp + batterij + grid samen aan op basis van metingen en forecasts.
 | ESP32-S3 P1 meter | Netto grid power (sensor.esp32_s3_zero_p1_netto_vermogen_watt) |
 | Zonneplan integratie | `sensor.zonneplan_current_electricity_tariff` + forecast attributen |
 
-## OpenQuatt-integratie
+### Optioneel — quatt_stooklijn
 
-`eos_06_openquatt_bridge.yaml` koppelt Energy OS aan OpenQuatt voor gecombineerde warmtepomp- en batterijsturing.
+De [quatt_stooklijn](https://github.com/Appesteijn) HA custom component verrijkt
+Energy OS met een gemeten thermisch model van het huis. Niet vereist — zonder de
+component vallen alle onderstaande punten terug op de bestaande heuristiek.
 
-### Wat het doet
-
-| Functie | Detail |
+| Levert | Gebruikt in |
 |---|---|
-| **Proxy-sensors** | Maakt `openquatt_ext_*`-entiteiten aan die OpenQuatt via HA leest (tarief nu/24h-gem, netto gridvermogen) |
-| **DHW-vensters** | Schrijft elke 15 min de goedkoopste en duurste tariefvensters naar `input_datetime.house_battery_strategy_dynamic_*` zodat OpenQuatt DHW en legionella slim plant |
-| **Comfort floor** | HP-cap wordt nooit lager dan een buitentemperatuurafhankelijk minimum (< -5 °C → 16, < 0 °C → 14, < 5 °C → 12, < 10 °C → 10, ≥ 10 °C → 6) |
-| **PV-voorrang** | Als zon > 200 W én (zon − HP) > 400 W loopt de HP onbeperkt, ongeacht de batterijmodus |
-| **HP cap brug** | Dispatcher schrijft de gewenste cap-waarde naar `number.openquatt_eos_hp_cap_ha` op de OpenQuatt-firmware |
+| `sensor.quatt_warmteanalyse_veilige_uitlooptijd` — veilige uitlooptijd (min) tot de comfort-vloer, incl. zon-forecast | **Comfort-guard** op de dure-tarief throttle (dispatcher) + `eos_asset_hp_can_defer_min` |
+| `sensor.quatt_warmteanalyse_geschatte_actuele_cop` — gemeten COP | `eos_asset_hp_cop_estimate` (vervangt Carnot-heuristiek) |
 
-### Activering HP cap brug
-
-De HP cap brug vereist één firmware-aanpassing in OpenQuatt:
-
-1. Voeg `oq_energy_os_bridge.yaml` toe als package in `openquatt_duo_lilygo_tconnect+cic.yaml` (al gedaan in deze build).
-2. Compileer en flash de firmware.
-3. Verwijder daarna het commentaar bij `number.set_value` in `script.eos_apply_hp_cap` in `eos_03_dispatcher.yaml`.
-
-Zolang de firmware nog niet geflasht is werkt alles behalve de HP cap brug — comfort floor en PV-voorrang zijn al actief.
+Met de comfort-guard knijpt Energy OS bij een duur tarief de warmtepomp alléén
+zolang het huis veilig kan uitlopen op zijn thermische massa — instelbaar via
+`input_number.eos_comfort_coast_margin_min`. Een zonnige middag (zon-forecast)
+verlengt automatisch hoe lang de WP geknepen mag blijven.
 
 ## Installatie
 
 Zie [INSTALLATIE.md](INSTALLATIE.md).
+
+## Tests
+
+De Jinja-logica van de comfort-guard wordt geborgd met geautomatiseerde tests
+(zie [tests/](tests/)). Ze renderen de échte package-YAML en controleren onder
+meer dat EOS zónder quatt_stooklijn exact het oorspronkelijke gedrag houdt.
+
+```bash
+pip install -r tests/requirements.txt
+pytest -q
+```
+
+CI draait deze automatisch bij elke push/PR.
 
 ## Migratie van v2
 
