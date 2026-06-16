@@ -563,6 +563,9 @@ views:
             name: "Uitstelruimte (uur)"
           - entity: sensor.eos_dhw_preheat_opportunity
             name: "Pre-heat kans"
+          - entity: sensor.eos_dhw_boost_requester
+            name: "Boost aanvrager"
+            icon: mdi:account-question
           - type: divider
           - entity: input_boolean.eos_dhw_solar_boost_enabled
             name: "Solar boost: toestaan"
