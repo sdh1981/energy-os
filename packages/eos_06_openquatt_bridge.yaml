@@ -64,6 +64,26 @@ template:
         icon: mdi:transmission-tower
         state: "{{ states('sensor.eos_grid_power_w') | float(0) | round(0) }}"
 
+      # ─── DHW Boost Aanvrager ─────────────────────────────────
+      # Toont wie de huidige (of laatste) DHW boost heeft aangevraagd.
+      # Wordt gevuld door automatisering bij start van een DHW-cyclus,
+      # gewist 30s na terugkeer naar IDLE_CV.
+      #
+      # Prioriteitsvolgorde:
+      #   Legionella → EnergyOS → OQ Auto Tarief → OQ Handmatig → Thermostaat
+      # Overschreven naar "Legionella" als state naar LEGIONELLA gaat zonder force-flag.
+      - name: "eos_dhw_boost_requester"
+        unique_id: eos_dhw_boost_requester
+        icon: >
+          {% set r = states('input_text.eos_dhw_boost_requester') %}
+          {% if r == 'EnergyOS' %}mdi:home-lightning-bolt
+          {% elif r == 'OQ Auto Tarief' %}mdi:cash-clock
+          {% elif r == 'OQ Handmatig' %}mdi:hand-pointing-right
+          {% elif 'Legionella' in r %}mdi:bacteria
+          {% elif r == 'Thermostaat' %}mdi:thermostat
+          {% else %}mdi:water-boiler{% endif %}
+        state: "{{ states('input_text.eos_dhw_boost_requester') or 'Geen' }}"
+
   - binary_sensor:
       # ─── Goedkoop tarief-venster voor legionella ─────────────
       # OpenQuatt gebruikt dit om de wekelijkse legionella-cyclus
@@ -83,6 +103,12 @@ template:
 #
 # EOS planner berekent de vensters; onderstaande automatie houdt
 # de datetimes gesynchroniseerd.
+input_text:
+  eos_dhw_boost_requester:
+    name: "DHW Boost Aanvrager"
+    icon: mdi:water-boiler-auto
+    initial: ""
+
 input_datetime:
   house_battery_strategy_dynamic_cheapest_start:
     name: "EOS: Goedkoopste tariefvenster start"
@@ -109,6 +135,56 @@ input_datetime:
     icon: mdi:clock-end
 
 automation:
+  # ── DHW Boost Aanvrager tracking ──────────────────────────────────────────────
+  - id: eos_dhw_track_requester_start
+    alias: "EOS: DHW boost aanvrager registreren bij start"
+    trigger:
+      - platform: state
+        entity_id: sensor.openquatt_dhw_state
+        from: "IDLE_CV"
+    action:
+      - variables:
+          requester: >
+            {% set legionella_force = is_state('switch.openquatt_dhw_source_legionella_force', 'on') %}
+            {% set eos_boost        = is_state('input_boolean.eos_dhw_solar_boost_active', 'on') %}
+            {% set oq_auto          = is_state('switch.openquatt_dhw_solar_boost_auto', 'on') %}
+            {% set oq_manual        = is_state('switch.openquatt_dhw_source_solar_boost', 'on') %}
+            {% if legionella_force %}Legionella
+            {% elif eos_boost %}EnergyOS
+            {% elif oq_auto %}OQ Auto Tarief
+            {% elif oq_manual %}OQ Handmatig
+            {% else %}Thermostaat{% endif %}
+      - service: input_text.set_value
+        target: {entity_id: input_text.eos_dhw_boost_requester}
+        data: {value: "{{ requester }}"}
+
+  - id: eos_dhw_track_requester_legionella
+    alias: "EOS: DHW legionella aanvrager corrigeren"
+    # Vangt automatische legionella (geen force-flag): IDLE_CV → DHW_PREPARE → LEGIONELLA.
+    # Bij DHW_PREPARE stond geen boost-flag aan → eerste automation zette "Thermostaat".
+    # Nu we LEGIONELLA zien, corrigeren we naar de juiste aanvrager.
+    trigger:
+      - platform: state
+        entity_id: sensor.openquatt_dhw_state
+        to: "LEGIONELLA"
+    action:
+      - service: input_text.set_value
+        target: {entity_id: input_text.eos_dhw_boost_requester}
+        data: {value: "Legionella"}
+
+  - id: eos_dhw_track_requester_clear
+    alias: "EOS: DHW boost aanvrager wissen na afloop"
+    trigger:
+      - platform: state
+        entity_id: sensor.openquatt_dhw_state
+        to: "IDLE_CV"
+        for: "00:00:30"
+    action:
+      - service: input_text.set_value
+        target: {entity_id: input_text.eos_dhw_boost_requester}
+        data: {value: ""}
+
+  # ── Tariefvenster datetimes ───────────────────────────────────────────────────
   - id: eos_write_oq_window_datetimes
     alias: "EOS → OQ: Tariefvenster datetimes bijhouden"
     description: >
