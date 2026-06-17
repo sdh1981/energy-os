@@ -29,6 +29,16 @@ input_number:
     icon: mdi:clock-time-two-outline
     mode: slider
 
+  eos_dhw_scheduler_max_price_eur:
+    name: "EOS DHW scheduler max prijs (€/kWh)"
+    min: 0.05
+    max: 0.60
+    step: 0.01
+    initial: 0.25
+    unit_of_measurement: "€/kWh"
+    icon: mdi:currency-eur
+    mode: slider
+
 template:
   - trigger:
       - platform: time_pattern
@@ -164,6 +174,10 @@ automation:
       - condition: state
         entity_id: sensor.eos_asset_dhw_needs_heating
         state: "True"
+      - condition: template
+        value_template: >
+          {{ states('sensor.eos_dhw_scheduled_slot_avg_price') | float(99)
+             <= states('input_number.eos_dhw_scheduler_max_price_eur') | float(0.25) }}
     action:
       - service: input_boolean.turn_on
         target: {entity_id: input_boolean.eos_dhw_solar_boost_active}
@@ -172,7 +186,7 @@ automation:
           title: "EOS DHW gepland"
           message: >
             DHW boost gestart: goedkoopste slot {{ states('sensor.eos_dhw_scheduled_slot_start') }}–{{ states('sensor.eos_dhw_scheduled_slot_end') }}
-            ({{ states('sensor.eos_dhw_scheduled_slot_avg_price') }} €/kWh).
+            ({{ states('sensor.eos_dhw_scheduled_slot_avg_price') }} €/kWh ≤ max {{ states('input_number.eos_dhw_scheduler_max_price_eur') }} €/kWh).
             Tank: {{ states('sensor.eos_dhw_top_c') }}°C.
           notification_id: eos_dhw_scheduled
 
