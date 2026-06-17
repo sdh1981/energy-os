@@ -243,6 +243,13 @@ views:
             name: "DHW temp"
           - entity: sensor.eos_asset_dhw_needs_heating
             name: "DHW vraag"
+          - type: divider
+          - entity: sensor.eos_plan_preheat_active
+            name: "Pre-heat actief"
+            icon: mdi:home-thermometer-outline
+          - entity: sensor.eos_plan_preheat_hours_until_expensive
+            name: "Uren tot duur venster"
+            icon: mdi:timer-outline
 
   # ─── VIEW 2: VANDAAG ──────────────────────────────────────
   - title: VANDAAG
@@ -594,6 +601,72 @@ views:
             name: "Duur venster einde → OQ"
             icon: mdi:clock-alert-outline
 
+      # ── M2: DHW Slim Scheduler ──────────────────────────
+      - type: entities
+        title: "DHW slim inplannen"
+        entities:
+          - entity: input_boolean.eos_dhw_scheduler_enabled
+            name: "Slim inplannen aan"
+            icon: mdi:calendar-clock
+          - entity: input_number.eos_dhw_scheduler_window_h
+            name: "Venstergrootte (uur)"
+          - entity: sensor.eos_dhw_scheduled_slot_start
+            name: "Gepland slot start"
+          - entity: sensor.eos_dhw_scheduled_slot_end
+            name: "Gepland slot einde"
+          - entity: sensor.eos_dhw_scheduled_slot_avg_price
+            name: "Gemiddelde prijs slot"
+          - entity: binary_sensor.eos_dhw_scheduled_slot_active
+            name: "Slot actief nu"
+
+      # ── M3: Dagelijkse kosten ────────────────────────────
+      - type: entities
+        title: "Kosten & besparingen vandaag"
+        entities:
+          - entity: sensor.eos_today_net_energy_cost_eur
+            name: "Netto energiekosten"
+          - entity: sensor.eos_today_hp_cost_eur
+            name: "Warmtepomp kosten"
+            icon: mdi:heat-pump
+          - entity: sensor.eos_today_solar_savings_eur
+            name: "Zon besparing"
+            icon: mdi:solar-power
+          - entity: sensor.eos_arbitrage_savings_today_eur
+            name: "Batterij arbitrage"
+            icon: mdi:battery-charging
+          - entity: sensor.eos_today_total_savings_eur
+            name: "Totaal bespaard"
+            icon: mdi:piggy-bank-outline
+          - entity: sensor.eos_kpi_self_consumption_pct
+            name: "Zelfverbruik %"
+
+      # ── M4: EV slim laden ───────────────────────────────
+      - type: entities
+        title: "EV slim laden"
+        entities:
+          - entity: input_boolean.eos_ev_smart_charge_enabled
+            name: "Slim laden aan"
+            icon: mdi:ev-station
+          - entity: binary_sensor.eos_ev_charging
+            name: "EV laadt nu"
+          - entity: sensor.eos_ev_charge_advice
+            name: "Laadadvies"
+            icon: mdi:car-electric
+          - entity: sensor.eos_ev_smart_window_start
+            name: "Goedkoop venster start"
+          - entity: sensor.eos_ev_smart_window_end
+            name: "Goedkoop venster einde"
+          - entity: sensor.eos_ev_smart_window_avg_price
+            name: "Gem. prijs venster"
+          - entity: binary_sensor.eos_ev_expensive_charge_alert
+            name: "Laden op duur tarief"
+            icon: mdi:alert-circle
+          - type: divider
+          - entity: input_number.eos_ev_charge_power_kw
+            name: "Laadvermogen (kW)"
+          - entity: input_number.eos_ev_charge_hours_target
+            name: "Benodigde laadtijd (uur)"
+
       # ── Anomalieën ──────────────────────────────────────
       - type: entities
         title: "Anomalieën"
@@ -632,6 +705,18 @@ views:
             name: "Vast: goedkoop < (€/kWh)"
           - entity: input_number.eos_tariff_expensive
             name: "Vast: duur > (€/kWh)"
+
+      # ── M1: Pre-heat instellingen ───────────────────────
+      - type: entities
+        title: "Pre-heat (huis voorverwarmen)"
+        entities:
+          - entity: sensor.eos_plan_preheat_active
+            name: "Pre-heat actief"
+            icon: mdi:home-thermometer-outline
+          - entity: sensor.eos_plan_preheat_hours_until_expensive
+            name: "Uren tot duur venster"
+          - entity: input_number.eos_preheat_horizon_h
+            name: "Horizon (uur van tevoren)"
 
       # ── Grid limieten ───────────────────────────────────
       - type: entities

@@ -152,14 +152,22 @@ script:
             data:
               value: >
                 {{ now().strftime('%H:%M') }} HP cap {{ current }} → {{ desired }}
-          # ESPHome brug: schrijft cap naar OpenQuatt firmware (oq_energy_os_bridge.yaml).
-          # Vereist: openquatt/oq_energy_os_bridge.yaml geïnclude in openquatt_duo_lilygo_tconnect+cic.yaml
-          # en firmware geflasht. Commentaar verwijderen zodra bridge actief is.
-          # - service: number.set_value
-          #   target: {entity_id: number.openquatt_eos_hp_cap_ha}
-          #   data: {value: "{{ desired }}"}
+          # ESPHome brug actief na firmware flash.
+          - service: number.set_value
+            target: {entity_id: number.openquatt_eos_hp_cap_ha}
+            data: {value: "{{ desired }}"}
 
 # State voor verklaarbaarheid (Laag 5 leest dit uit)
+input_number:
+  eos_preheat_horizon_h:
+    name: "EOS Pre-heat horizon (uur)"
+    min: 1
+    max: 6
+    step: 0.5
+    initial: 3
+    icon: mdi:clock-fast
+    mode: slider
+
 input_text:
   eos_last_action:
     name: "EOS Laatste actie"
@@ -326,17 +334,19 @@ automation:
                     state: "on"
                 then:
                   - variables:
+                      preheat: "{{ is_state('sensor.eos_plan_preheat_active', 'True') }}"
                       raw_cap: >
                         {% if grid > hard_lim %}{{ hp_peak }}
                         {% elif level == 'duur' and not bat_low %}{{ hp_sell }}
                         {% elif level == 'goedkoop' %}{{ hp_charge }}
                         {% else %}{{ hp_full }}{% endif %}
                       desired_cap: >
-                        {% if pv_covers_hp %}{{ hp_full }}
+                        {% if pv_covers_hp or preheat %}{{ hp_full }}
                         {% else %}{{ [raw_cap | int, hp_comfort_min] | max }}{% endif %}
                       reason_text: >
-                        {% set floor_active = not pv_covers_hp and (raw_cap | int) < hp_comfort_min %}
+                        {% set floor_active = not pv_covers_hp and not preheat and (raw_cap | int) < hp_comfort_min %}
                         {% if pv_covers_hp %}PV dekt HP → vrij
+                        {% elif preheat %}Pre-heat actief → HP vrij (duur uur in {{ states('sensor.eos_plan_preheat_hours_until_expensive') }}u)
                         {% elif grid > hard_lim %}Grid {{ grid | int }}W boven limit → HP cap {{ desired_cap }}
                         {% elif level == 'duur' and not bat_low %}Duur tarief, ESP ontlaadt → HP cap {{ desired_cap }}{% if floor_active %} (floor){% endif %}
                         {% elif level == 'goedkoop' %}Goedkoop, ESP laadt → HP cap {{ desired_cap }}{% if floor_active %} (floor){% endif %}

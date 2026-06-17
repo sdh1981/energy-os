@@ -521,3 +521,42 @@ template:
           {% if hour_ts in ns2.cheap_ts %}goedkoop
           {% elif hour_ts in ns2.exp_ts %}duur
           {% else %}normaal{% endif %}
+
+      # ─── M1: Pre-heat horizon ───────────────────────────────
+      # True als het dure tariefvenster binnen `eos_preheat_horizon_h` uur begint
+      # EN het tarief nu niet duur is EN buiten < 15°C.
+      # Dispatcher gebruikt dit om HP vrij te laten lopen voor het dure uur.
+      - name: "eos_plan_preheat_active"
+        unique_id: eos_plan_preheat_active
+        icon: mdi:home-thermometer-outline
+        state: >
+          {% set hp_coord = is_state('input_boolean.energy_os_hp_coordination', 'on') %}
+          {% set tout     = states('sensor.eos_outside_temp_c') | float(20) %}
+          {% set level    = states('sensor.eos_tariff_level') %}
+          {% set exp_start = states('sensor.eos_plan_expensive_window_start') %}
+          {% set horizon_h = states('input_number.eos_preheat_horizon_h') | float(3) %}
+          {% if not hp_coord or tout >= 15 or level == 'duur' %}false
+          {% elif exp_start in ['unknown', 'unavailable', 'onbekend', 'none', ''] %}false
+          {% else %}
+            {% set now_frac = now().hour + now().minute / 60.0 %}
+            {% set exp_h = exp_start.split(':')[0] | int(0) %}
+            {% set exp_m = exp_start.split(':')[1] | int(0) %}
+            {% set exp_frac = exp_h + exp_m / 60.0 %}
+            {% set diff = ((exp_frac - now_frac) % 24) %}
+            {{ diff > 0 and diff <= horizon_h }}
+          {% endif %}
+
+      - name: "eos_plan_preheat_hours_until_expensive"
+        unique_id: eos_plan_preheat_hours_until_expensive
+        unit_of_measurement: "h"
+        icon: mdi:timer-outline
+        state: >
+          {% set exp_start = states('sensor.eos_plan_expensive_window_start') %}
+          {% if exp_start in ['unknown', 'unavailable', 'onbekend', 'none', ''] %}24
+          {% else %}
+            {% set now_frac = now().hour + now().minute / 60.0 %}
+            {% set exp_h = exp_start.split(':')[0] | int(0) %}
+            {% set exp_m = exp_start.split(':')[1] | int(0) %}
+            {% set exp_frac = exp_h + exp_m / 60.0 %}
+            {{ (((exp_frac - now_frac) % 24)) | round(1) }}
+          {% endif %}

@@ -1,0 +1,214 @@
+# ============================================================
+# EnergyOS — Laag 8 — EV Slim Laden
+# ============================================================
+# Berekent het goedkoopste N-uurs laadvenster voor de EV en
+# geeft een aanbeveling: nu laden of wachten.
+#
+# Coördinatie:
+#   - EV laadt in goedkoop venster: batterij mag ook laden (synergie)
+#   - EV laadt tijdens duur tarief: waarschuwing / advies te stoppen
+#   - EV + HP + duur tarief: HP cap-reden vermeldt EV-belasting
+#
+# Vereist: laadpaal die HA-besturing ondersteunt (bijv. via Zappi,
+# Easee, OCPP of Zonneplan EV-integratie).
+# Master: input_boolean.eos_ev_smart_charge_enabled
+# ============================================================
+
+input_boolean:
+  eos_ev_smart_charge_enabled:
+    name: "EOS EV slim laden"
+    icon: mdi:ev-station
+
+input_number:
+  eos_ev_charge_power_kw:
+    name: "EOS EV laadvermogen (kW)"
+    min: 1.4
+    max: 22
+    step: 0.1
+    initial: 7.4
+    unit_of_measurement: "kW"
+    icon: mdi:lightning-bolt
+    mode: box
+
+  eos_ev_charge_hours_target:
+    name: "EOS EV benodigde laadtijd (uur)"
+    min: 1
+    max: 12
+    step: 0.5
+    initial: 4
+    icon: mdi:clock-fast
+    mode: slider
+
+template:
+  - trigger:
+      - platform: time_pattern
+        minutes: "/15"
+      - platform: state
+        entity_id: sensor.zonneplan_current_electricity_tariff
+      - platform: homeassistant
+        event: start
+    sensor:
+      # ─── Goedkoopste EV-laadvenster start ────────────────────
+      - name: "eos_ev_smart_window_start"
+        unique_id: eos_ev_smart_window_start
+        icon: mdi:ev-plug-type2
+        state: >
+          {% set fc = state_attr('sensor.zonneplan_current_electricity_tariff', 'forecast') or [] %}
+          {% set now_ts = as_timestamp(now()) | int %}
+          {% set n = states('input_number.eos_ev_charge_hours_target') | float(4) | round(0, 'ceil') | int %}
+          {% set ns = namespace(slots=[], best_i=-1, best_cost=1e9) %}
+          {% for item in fc %}
+            {% set ts = as_timestamp(item.datetime) | int %}
+            {% if ts >= now_ts and ts < now_ts + 86400 %}
+              {% set ns.slots = ns.slots + [{'ts': ts, 'p': (item.electricity_price | float(0)) / 10000000}] %}
+            {% endif %}
+          {% endfor %}
+          {% set total = ns.slots | length %}
+          {% for i in range([total - n + 1, 0] | max) %}
+            {% set wc = namespace(v=0) %}
+            {% for j in range(n) %}
+              {% set wc.v = wc.v + ns.slots[i + j].p %}
+            {% endfor %}
+            {% if wc.v < ns.best_cost %}
+              {% set ns.best_cost = wc.v %}
+              {% set ns.best_i = i %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.best_i >= 0 %}
+            {{ ns.slots[ns.best_i].ts | timestamp_custom('%H:%M', true) }}
+          {% else %}onbekend{% endif %}
+
+      - name: "eos_ev_smart_window_end"
+        unique_id: eos_ev_smart_window_end
+        icon: mdi:ev-plug-type2
+        state: >
+          {% set fc = state_attr('sensor.zonneplan_current_electricity_tariff', 'forecast') or [] %}
+          {% set now_ts = as_timestamp(now()) | int %}
+          {% set n = states('input_number.eos_ev_charge_hours_target') | float(4) | round(0, 'ceil') | int %}
+          {% set ns = namespace(slots=[], best_i=-1, best_cost=1e9) %}
+          {% for item in fc %}
+            {% set ts = as_timestamp(item.datetime) | int %}
+            {% if ts >= now_ts and ts < now_ts + 86400 %}
+              {% set ns.slots = ns.slots + [{'ts': ts, 'p': (item.electricity_price | float(0)) / 10000000}] %}
+            {% endif %}
+          {% endfor %}
+          {% set total = ns.slots | length %}
+          {% for i in range([total - n + 1, 0] | max) %}
+            {% set wc = namespace(v=0) %}
+            {% for j in range(n) %}
+              {% set wc.v = wc.v + ns.slots[i + j].p %}
+            {% endfor %}
+            {% if wc.v < ns.best_cost %}
+              {% set ns.best_cost = wc.v %}
+              {% set ns.best_i = i %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.best_i >= 0 %}
+            {{ (ns.slots[ns.best_i].ts + n * 3600) | timestamp_custom('%H:%M', true) }}
+          {% else %}onbekend{% endif %}
+
+      - name: "eos_ev_smart_window_avg_price"
+        unique_id: eos_ev_smart_window_avg_price
+        unit_of_measurement: "€/kWh"
+        icon: mdi:currency-eur
+        state: >
+          {% set fc = state_attr('sensor.zonneplan_current_electricity_tariff', 'forecast') or [] %}
+          {% set now_ts = as_timestamp(now()) | int %}
+          {% set n = states('input_number.eos_ev_charge_hours_target') | float(4) | round(0, 'ceil') | int %}
+          {% set ns = namespace(slots=[], best_i=-1, best_cost=1e9) %}
+          {% for item in fc %}
+            {% set ts = as_timestamp(item.datetime) | int %}
+            {% if ts >= now_ts and ts < now_ts + 86400 %}
+              {% set ns.slots = ns.slots + [{'ts': ts, 'p': (item.electricity_price | float(0)) / 10000000}] %}
+            {% endif %}
+          {% endfor %}
+          {% set total = ns.slots | length %}
+          {% for i in range([total - n + 1, 0] | max) %}
+            {% set wc = namespace(v=0) %}
+            {% for j in range(n) %}
+              {% set wc.v = wc.v + ns.slots[i + j].p %}
+            {% endfor %}
+            {% if wc.v < ns.best_cost %}
+              {% set ns.best_cost = wc.v %}
+              {% set ns.best_i = i %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.best_i >= 0 and n > 0 %}{{ (ns.best_cost / n) | round(4) }}
+          {% else %}0{% endif %}
+
+      # ─── EV laadadvies ───────────────────────────────────────
+      - name: "eos_ev_charge_advice"
+        unique_id: eos_ev_charge_advice
+        icon: mdi:car-electric
+        state: >
+          {% set enabled  = is_state('input_boolean.eos_ev_smart_charge_enabled', 'on') %}
+          {% set charging = is_state('binary_sensor.eos_ev_charging', 'on') %}
+          {% set level    = states('sensor.eos_tariff_level') %}
+          {% set in_win   = is_state('binary_sensor.eos_ev_smart_window_active', 'on') %}
+          {% set win_start = states('sensor.eos_ev_smart_window_start') %}
+          {% if not enabled %}Slim laden uit
+          {% elif not charging %}Niet aangesloten
+          {% elif in_win %}Nu laden — goedkoopste venster ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh)
+          {% elif level == 'duur' %}Wachten — duur tarief, goedkoop venster {{ win_start }}
+          {% else %}Laden kan — beter wachten tot {{ win_start }} ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh){% endif %}
+
+  - binary_sensor:
+      # ─── In het aanbevolen laadvenster ───────────────────────
+      - name: "eos_ev_smart_window_active"
+        unique_id: eos_ev_smart_window_active
+        device_class: plug
+        state: >
+          {% set ws = states('sensor.eos_ev_smart_window_start') %}
+          {% set we = states('sensor.eos_ev_smart_window_end') %}
+          {% if ws in ['onbekend', 'unknown', 'unavailable'] %}false
+          {% else %}
+            {% set now_h = now().hour + now().minute / 60.0 %}
+            {% set sh = ws.split(':')[0] | int(0) + ws.split(':')[1] | int(0) / 60.0 %}
+            {% set eh = we.split(':')[0] | int(0) + we.split(':')[1] | int(0) / 60.0 %}
+            {% if sh <= eh %}{{ now_h >= sh and now_h < eh }}
+            {% else %}{{ now_h >= sh or now_h < eh }}{% endif %}
+          {% endif %}
+
+      # ─── EV-belasting conflicteert met duur tarief ───────────
+      - name: "eos_ev_expensive_charge_alert"
+        unique_id: eos_ev_expensive_charge_alert
+        device_class: problem
+        state: >
+          {% set charging = is_state('binary_sensor.eos_ev_charging', 'on') %}
+          {% set level    = states('sensor.eos_tariff_level') %}
+          {% set soc      = states('sensor.eos_battery_soc_estimate_pct') | float(50) %}
+          {{ charging and level == 'duur' and soc < 60 }}
+
+automation:
+  - id: eos_ev_expensive_alert
+    alias: "EOS EV: waarschuwing laden tijdens duur tarief"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.eos_ev_expensive_charge_alert
+        to: "on"
+        for: "00:05:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_ev_smart_charge_enabled
+        state: "on"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "EOS EV: laden tijdens duur tarief"
+          message: >
+            EV laadt op duur tarief ({{ states('sensor.eos_tariff_eur_kwh') }} €/kWh).
+            Goedkoper venster: {{ states('sensor.eos_ev_smart_window_start') }}–{{ states('sensor.eos_ev_smart_window_end') }}
+            ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh).
+            Batterij SoC: {{ states('sensor.eos_battery_soc_estimate_pct') }}%.
+          notification_id: eos_ev_expensive_alert
+
+  - id: eos_ev_expensive_alert_clear
+    alias: "EOS EV: waarschuwing wissen als tarief daalt"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.eos_ev_expensive_charge_alert
+        to: "off"
+    action:
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: eos_ev_expensive_alert

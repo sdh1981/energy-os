@@ -194,6 +194,58 @@ template:
           gemeten {{ actual | int }}W → afwijking {{ diff | int }}W
         icon: mdi:scale-balance
 
+      # ─── M3: Dagelijkse kostenbreakdown ─────────────────────
+      # HP kosten vandaag: OpenQuatt daily energy × huidig tarief als proxy.
+      # Echte kost = HP-energie × gemiddeld importtarief van vandaag.
+      - name: "eos_today_hp_cost_eur"
+        unique_id: eos_today_hp_cost_eur
+        unit_of_measurement: "€"
+        state_class: measurement
+        icon: mdi:heat-pump
+        state: >
+          {% set hp_kwh = states('sensor.openquatt_electrical_energy_daily') | float(0) %}
+          {% set tariff  = states('sensor.eos_tariff_eur_kwh') | float(0.25) %}
+          {% set avg_imp = states('sensor.eos_plan_cheapest_window_avg_price') | float(tariff) %}
+          {% set price   = ((tariff + avg_imp) / 2) | round(4) %}
+          {{ (hp_kwh * price) | round(2) }}
+
+      # Zonnepaneel besparingen vandaag: zelfverbruik × gemiddeld tarief
+      - name: "eos_today_solar_savings_eur"
+        unique_id: eos_today_solar_savings_eur
+        unit_of_measurement: "€"
+        state_class: measurement
+        icon: mdi:solar-power
+        state: >
+          {% set solar   = states('sensor.eos_today_solar_production_meter') | float(0) %}
+          {% set exp     = states('sensor.eos_today_grid_export_meter') | float(0) %}
+          {% set selfuse = [solar - exp, 0] | max %}
+          {% set tariff  = states('sensor.eos_tariff_eur_kwh') | float(0.25) %}
+          {{ (selfuse * tariff) | round(2) }}
+
+      # Totaal bespaard vandaag = batterij arbitrage + zonnezelfverbruik
+      - name: "eos_today_total_savings_eur"
+        unique_id: eos_today_total_savings_eur
+        unit_of_measurement: "€"
+        state_class: measurement
+        icon: mdi:piggy-bank-outline
+        state: >
+          {% set arb    = states('sensor.eos_arbitrage_savings_today_eur') | float(0) %}
+          {% set solar  = states('sensor.eos_today_solar_savings_eur') | float(0) %}
+          {{ (arb + solar) | round(2) }}
+
+      # Samenvatting in één zin voor notificatie
+      - name: "eos_daily_report_text"
+        unique_id: eos_daily_report_text
+        icon: mdi:file-chart
+        state: >
+          {% set net     = states('sensor.eos_today_net_energy_cost_eur') | float(0) %}
+          {% set hp_cost = states('sensor.eos_today_hp_cost_eur') | float(0) %}
+          {% set savings = states('sensor.eos_today_total_savings_eur') | float(0) %}
+          {% set solar   = states('sensor.eos_today_solar_production_meter') | float(0) %}
+          {% set imp     = states('sensor.eos_today_grid_import_meter') | float(0) %}
+          {% set exp     = states('sensor.eos_today_grid_export_meter') | float(0) %}
+          Netto: €{{ net }}, WP: €{{ hp_cost }}, bespaard: €{{ savings }} | zon {{ solar | round(1) }} kWh, import {{ imp | round(1) }} kWh, export {{ exp | round(1) }} kWh
+
   # ─── Anomalie-baselines (longterm trends) ───────────────
   - binary_sensor:
       - name: "eos_anomaly_hp_high_power"
@@ -345,3 +397,32 @@ automation:
             Gemeten capaciteit: {{ measured | round(2) }} kWh
             (nominaal 15.36 kWh → SoH {{ soh_pct }}%).
           notification_id: "eos_soh_measurement"
+
+  # ── M3: Dagelijks kostenrapport ──────────────────────────────
+  - id: eos_daily_cost_report
+    alias: "EOS: Dagelijks kostenrapport (23:55)"
+    trigger:
+      - platform: time
+        at: "23:55:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.energy_os_enabled
+        state: "on"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "EnergyOS dagrapport {{ now().strftime('%d-%m-%Y') }}"
+          message: >
+            💡 Netto energiekosten: €{{ states('sensor.eos_today_net_energy_cost_eur') }}
+
+            🔥 Warmtepomp: €{{ states('sensor.eos_today_hp_cost_eur') }} ({{ states('sensor.openquatt_electrical_energy_daily') | round(1) }} kWh)
+            ☀️  Zon opgewekt: {{ states('sensor.eos_today_solar_production_meter') | round(1) }} kWh
+            🔋 Batterij arbitrage: €{{ states('sensor.eos_arbitrage_savings_today_eur') }}
+            💰 Totaal bespaard: €{{ states('sensor.eos_today_total_savings_eur') }}
+
+            📥 Import: {{ states('sensor.eos_today_grid_import_meter') | round(1) }} kWh
+            📤 Export: {{ states('sensor.eos_today_grid_export_meter') | round(1) }} kWh
+            ⚡ Zelfverbruik: {{ states('sensor.eos_kpi_self_consumption_pct') }}%
+
+            Dispatcher: {{ states('input_text.eos_current_reason') }}
+          notification_id: eos_daily_report

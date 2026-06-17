@@ -1,0 +1,194 @@
+# ============================================================
+# EnergyOS — Laag 7 — DHW Slim Scheduler
+# ============================================================
+# Plant DHW-opwarming in het goedkoopste 2-uurs slot van de
+# komende 24 uur op basis van de Zonneplan tariefforecast.
+#
+# Werking:
+#   - Elke 15 minuten: zoek het goedkoopste 2-uurs venster (nu of later)
+#   - Als het huidige uur in dat venster valt én de tank koud is:
+#     activeer eos_dhw_solar_boost_active
+#   - Zodra het venster voorbij is of tank voldoende warm: deactiveer
+#
+# Master switch: input_boolean.eos_dhw_scheduler_enabled
+# Raakt niet aan bestaande preheat_opportunity logica — werkt aanvullend.
+# ============================================================
+
+input_boolean:
+  eos_dhw_scheduler_enabled:
+    name: "EOS DHW slim inplannen"
+    icon: mdi:calendar-clock
+
+input_number:
+  eos_dhw_scheduler_window_h:
+    name: "EOS DHW scheduler venstergrootte (uur)"
+    min: 1
+    max: 4
+    step: 1
+    initial: 2
+    icon: mdi:clock-time-two-outline
+    mode: slider
+
+template:
+  - trigger:
+      - platform: time_pattern
+        minutes: "/15"
+      - platform: state
+        entity_id: sensor.zonneplan_current_electricity_tariff
+      - platform: homeassistant
+        event: start
+    sensor:
+      # ─── Goedkoopste DHW-slot start ──────────────────────────
+      - name: "eos_dhw_scheduled_slot_start"
+        unique_id: eos_dhw_scheduled_slot_start
+        icon: mdi:water-boiler-alert
+        state: >
+          {% set fc = state_attr('sensor.zonneplan_current_electricity_tariff', 'forecast') or [] %}
+          {% set now_ts = as_timestamp(now()) | int %}
+          {% set n = states('input_number.eos_dhw_scheduler_window_h') | int(2) %}
+          {% set ns = namespace(slots=[], best_i=-1, best_cost=1e9) %}
+          {% for item in fc %}
+            {% set ts = as_timestamp(item.datetime) | int %}
+            {% if ts >= now_ts and ts < now_ts + 86400 %}
+              {% set ns.slots = ns.slots + [{'ts': ts, 'p': (item.electricity_price | float(0)) / 10000000}] %}
+            {% endif %}
+          {% endfor %}
+          {% set total = ns.slots | length %}
+          {% for i in range([total - n + 1, 0] | max) %}
+            {% set wc = namespace(v=0) %}
+            {% for j in range(n) %}
+              {% set wc.v = wc.v + ns.slots[i + j].p %}
+            {% endfor %}
+            {% if wc.v < ns.best_cost %}
+              {% set ns.best_cost = wc.v %}
+              {% set ns.best_i = i %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.best_i >= 0 %}
+            {{ ns.slots[ns.best_i].ts | timestamp_custom('%H:%M', true) }}
+          {% else %}onbekend{% endif %}
+
+      - name: "eos_dhw_scheduled_slot_end"
+        unique_id: eos_dhw_scheduled_slot_end
+        icon: mdi:water-boiler-off
+        state: >
+          {% set fc = state_attr('sensor.zonneplan_current_electricity_tariff', 'forecast') or [] %}
+          {% set now_ts = as_timestamp(now()) | int %}
+          {% set n = states('input_number.eos_dhw_scheduler_window_h') | int(2) %}
+          {% set ns = namespace(slots=[], best_i=-1, best_cost=1e9) %}
+          {% for item in fc %}
+            {% set ts = as_timestamp(item.datetime) | int %}
+            {% if ts >= now_ts and ts < now_ts + 86400 %}
+              {% set ns.slots = ns.slots + [{'ts': ts, 'p': (item.electricity_price | float(0)) / 10000000}] %}
+            {% endif %}
+          {% endfor %}
+          {% set total = ns.slots | length %}
+          {% for i in range([total - n + 1, 0] | max) %}
+            {% set wc = namespace(v=0) %}
+            {% for j in range(n) %}
+              {% set wc.v = wc.v + ns.slots[i + j].p %}
+            {% endfor %}
+            {% if wc.v < ns.best_cost %}
+              {% set ns.best_cost = wc.v %}
+              {% set ns.best_i = i %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.best_i >= 0 %}
+            {{ (ns.slots[ns.best_i].ts + n * 3600) | timestamp_custom('%H:%M', true) }}
+          {% else %}onbekend{% endif %}
+
+      - name: "eos_dhw_scheduled_slot_avg_price"
+        unique_id: eos_dhw_scheduled_slot_avg_price
+        unit_of_measurement: "€/kWh"
+        icon: mdi:currency-eur
+        state: >
+          {% set fc = state_attr('sensor.zonneplan_current_electricity_tariff', 'forecast') or [] %}
+          {% set now_ts = as_timestamp(now()) | int %}
+          {% set n = states('input_number.eos_dhw_scheduler_window_h') | int(2) %}
+          {% set ns = namespace(slots=[], best_i=-1, best_cost=1e9) %}
+          {% for item in fc %}
+            {% set ts = as_timestamp(item.datetime) | int %}
+            {% if ts >= now_ts and ts < now_ts + 86400 %}
+              {% set ns.slots = ns.slots + [{'ts': ts, 'p': (item.electricity_price | float(0)) / 10000000}] %}
+            {% endif %}
+          {% endfor %}
+          {% set total = ns.slots | length %}
+          {% for i in range([total - n + 1, 0] | max) %}
+            {% set wc = namespace(v=0) %}
+            {% for j in range(n) %}
+              {% set wc.v = wc.v + ns.slots[i + j].p %}
+            {% endfor %}
+            {% if wc.v < ns.best_cost %}
+              {% set ns.best_cost = wc.v %}
+              {% set ns.best_i = i %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.best_i >= 0 and n > 0 %}{{ (ns.best_cost / n) | round(4) }}
+          {% else %}0{% endif %}
+
+  - binary_sensor:
+      # ─── Actief in gepland DHW-slot ──────────────────────────
+      - name: "eos_dhw_scheduled_slot_active"
+        unique_id: eos_dhw_scheduled_slot_active
+        icon: mdi:water-boiler
+        state: >
+          {% set slot_start = states('sensor.eos_dhw_scheduled_slot_start') %}
+          {% set slot_end   = states('sensor.eos_dhw_scheduled_slot_end') %}
+          {% if slot_start in ['onbekend', 'unknown', 'unavailable'] %}false
+          {% else %}
+            {% set now_h = now().hour + now().minute / 60.0 %}
+            {% set sh = slot_start.split(':')[0] | int(0) %}
+            {% set sm = slot_start.split(':')[1] | int(0) %}
+            {% set eh = slot_end.split(':')[0] | int(0) %}
+            {% set em = slot_end.split(':')[1] | int(0) %}
+            {% set s = sh + sm / 60.0 %}
+            {% set e = eh + em / 60.0 %}
+            {% if s <= e %}{{ now_h >= s and now_h < e }}
+            {% else %}{{ now_h >= s or now_h < e }}{% endif %}
+          {% endif %}
+
+automation:
+  - id: eos_dhw_scheduler_activate
+    alias: "EOS DHW: boost activeren in gepland goedkoop slot"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.eos_dhw_scheduled_slot_active
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_dhw_scheduler_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.energy_os_enabled
+        state: "on"
+      - condition: state
+        entity_id: sensor.eos_asset_dhw_needs_heating
+        state: "True"
+    action:
+      - service: input_boolean.turn_on
+        target: {entity_id: input_boolean.eos_dhw_solar_boost_active}
+      - service: persistent_notification.create
+        data:
+          title: "EOS DHW gepland"
+          message: >
+            DHW boost gestart: goedkoopste slot {{ states('sensor.eos_dhw_scheduled_slot_start') }}–{{ states('sensor.eos_dhw_scheduled_slot_end') }}
+            ({{ states('sensor.eos_dhw_scheduled_slot_avg_price') }} €/kWh).
+            Tank: {{ states('sensor.eos_dhw_top_c') }}°C.
+          notification_id: eos_dhw_scheduled
+
+  - id: eos_dhw_scheduler_deactivate
+    alias: "EOS DHW: boost deactiveren na gepland slot"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.eos_dhw_scheduled_slot_active
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_dhw_scheduler_enabled
+        state: "on"
+    action:
+      - service: input_boolean.turn_off
+        target: {entity_id: input_boolean.eos_dhw_solar_boost_active}
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: eos_dhw_scheduled
