@@ -1,17 +1,21 @@
 # ============================================================
-# EnergyOS — Laag 8 — EV Slim Laden
+# EnergyOS — Laag 8 — EV Slim Laden (Peblar)
 # ============================================================
-# Berekent het goedkoopste N-uurs laadvenster voor de EV en
-# geeft een aanbeveling: nu laden of wachten.
+# Stuurt de Peblar laadpaal aan op basis van Zonneplan forecast.
 #
-# Coördinatie:
-#   - EV laadt in goedkoop venster: batterij mag ook laden (synergie)
-#   - EV laadt tijdens duur tarief: waarschuwing / advies te stoppen
-#   - EV + HP + duur tarief: HP cap-reden vermeldt EV-belasting
+# Peblar entiteiten:
+#   switch.peblar_ev_charger_opladen       → laden start/stop
+#   number.peblar_ev_charger_laadlimiet    → laadstroom in A (6–32)
+#   sensor.peblar_ev_charger_status        → laadstatus (charging/connected/disconnected)
+#   sensor.peblar_ev_charger_sessie_energie → kWh huidige sessie
 #
-# Vereist: laadpaal die HA-besturing ondersteunt (bijv. via Zappi,
-# Easee, OCPP of Zonneplan EV-integratie).
-# Master: input_boolean.eos_ev_smart_charge_enabled
+# Strategie:
+#   1. Goedkoop venster begint → Peblar aan op eos_ev_max_current_a
+#   2. Duur tarief terwijl laden actief → stroom terug naar eos_ev_min_current_a
+#   3. Tarief normaal/goedkoop → stroom herstellen naar max
+#   4. EV losgekoppeld → geen actie
+#
+# Master switch: input_boolean.eos_ev_smart_charge_enabled
 # ============================================================
 
 input_boolean:
@@ -19,17 +23,11 @@ input_boolean:
     name: "EOS EV slim laden"
     icon: mdi:ev-station
 
-input_number:
-  eos_ev_charge_power_kw:
-    name: "EOS EV laadvermogen (kW)"
-    min: 1.4
-    max: 22
-    step: 0.1
-    initial: 7.4
-    unit_of_measurement: "kW"
-    icon: mdi:lightning-bolt
-    mode: box
+  eos_ev_auto_start_enabled:
+    name: "EOS EV automatisch starten in goedkoop venster"
+    icon: mdi:play-circle-outline
 
+input_number:
   eos_ev_charge_hours_target:
     name: "EOS EV benodigde laadtijd (uur)"
     min: 1
@@ -37,6 +35,26 @@ input_number:
     step: 0.5
     initial: 4
     icon: mdi:clock-fast
+    mode: slider
+
+  eos_ev_max_current_a:
+    name: "EOS EV max laadstroom (A)"
+    min: 6
+    max: 32
+    step: 1
+    initial: 16
+    unit_of_measurement: "A"
+    icon: mdi:current-ac
+    mode: slider
+
+  eos_ev_min_current_a:
+    name: "EOS EV min laadstroom bij duur tarief (A)"
+    min: 6
+    max: 16
+    step: 1
+    initial: 6
+    unit_of_measurement: "A"
+    icon: mdi:current-ac
     mode: slider
 
 template:
@@ -141,22 +159,42 @@ template:
         unique_id: eos_ev_charge_advice
         icon: mdi:car-electric
         state: >
-          {% set enabled  = is_state('input_boolean.eos_ev_smart_charge_enabled', 'on') %}
-          {% set charging = is_state('binary_sensor.eos_ev_charging', 'on') %}
-          {% set level    = states('sensor.eos_tariff_level') %}
-          {% set in_win   = is_state('binary_sensor.eos_ev_smart_window_active', 'on') %}
+          {% set enabled   = is_state('input_boolean.eos_ev_smart_charge_enabled', 'on') %}
+          {% set status    = states('sensor.peblar_ev_charger_status') | lower %}
+          {% set connected = status not in ['disconnected', 'unavailable', 'unknown', ''] %}
+          {% set charging  = 'charging' in status %}
+          {% set level     = states('sensor.eos_tariff_level') %}
+          {% set in_win    = is_state('binary_sensor.eos_ev_smart_window_active', 'on') %}
           {% set win_start = states('sensor.eos_ev_smart_window_start') %}
+          {% set curr_lim  = states('number.peblar_ev_charger_laadlimiet') | int(0) %}
+          {% set min_a     = states('input_number.eos_ev_min_current_a') | int(6) %}
           {% if not enabled %}Slim laden uit
-          {% elif not charging %}Niet aangesloten
-          {% elif in_win %}Nu laden — goedkoopste venster ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh)
+          {% elif not connected %}Niet aangesloten
+          {% elif in_win and charging and curr_lim > min_a %}Nu laden op vol vermogen ({{ (curr_lim * 230 / 1000) | round(1) }} kW)
+          {% elif in_win and charging %}Nu laden — duur tarief beperkt stroom ({{ curr_lim }}A)
+          {% elif in_win %}Goedkoop venster actief — laden starten
+          {% elif level == 'duur' and charging %}Duur tarief — stroom beperkt tot {{ min_a }}A
           {% elif level == 'duur' %}Wachten — duur tarief, goedkoop venster {{ win_start }}
-          {% else %}Laden kan — beter wachten tot {{ win_start }} ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh){% endif %}
+          {% else %}Wachten op goedkoopste venster ({{ win_start }}, {{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh){% endif %}
 
   - binary_sensor:
+      # ─── Auto aangesloten ────────────────────────────────────
+      - name: "eos_peblar_connected"
+        unique_id: eos_peblar_connected
+        device_class: plug
+        state: >
+          {% set s = states('sensor.peblar_ev_charger_status') | lower %}
+          {{ s not in ['disconnected', 'unavailable', 'unknown', ''] }}
+
+      # ─── Auto laadt actief ───────────────────────────────────
+      - name: "eos_peblar_charging"
+        unique_id: eos_peblar_charging
+        device_class: battery_charging
+        state: "{{ 'charging' in states('sensor.peblar_ev_charger_status') | lower }}"
+
       # ─── In het aanbevolen laadvenster ───────────────────────
       - name: "eos_ev_smart_window_active"
         unique_id: eos_ev_smart_window_active
-        device_class: plug
         state: >
           {% set ws = states('sensor.eos_ev_smart_window_start') %}
           {% set we = states('sensor.eos_ev_smart_window_end') %}
@@ -169,19 +207,113 @@ template:
             {% else %}{{ now_h >= sh or now_h < eh }}{% endif %}
           {% endif %}
 
-      # ─── EV-belasting conflicteert met duur tarief ───────────
+      # ─── Laadt op duur tarief (alert) ────────────────────────
       - name: "eos_ev_expensive_charge_alert"
         unique_id: eos_ev_expensive_charge_alert
         device_class: problem
         state: >
-          {% set charging = is_state('binary_sensor.eos_ev_charging', 'on') %}
+          {% set charging = 'charging' in states('sensor.peblar_ev_charger_status') | lower %}
           {% set level    = states('sensor.eos_tariff_level') %}
-          {% set soc      = states('sensor.eos_battery_soc_estimate_pct') | float(50) %}
-          {{ charging and level == 'duur' and soc < 60 }}
+          {% set curr_lim = states('number.peblar_ev_charger_laadlimiet') | int(0) %}
+          {% set min_a    = states('input_number.eos_ev_min_current_a') | int(6) %}
+          {{ charging and level == 'duur' and curr_lim > min_a }}
 
 automation:
+  # ── Goedkoop venster start: Peblar aanzetten op max stroom ────
+  - id: eos_ev_smart_window_start
+    alias: "EOS EV: start laden bij goedkoop venster"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.eos_ev_smart_window_active
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_ev_smart_charge_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.eos_ev_auto_start_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.energy_os_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.eos_peblar_connected
+        state: "on"
+    action:
+      - service: number.set_value
+        target: {entity_id: number.peblar_ev_charger_laadlimiet}
+        data: {value: "{{ states('input_number.eos_ev_max_current_a') | int(16) }}"}
+      - service: switch.turn_on
+        target: {entity_id: switch.peblar_ev_charger_opladen}
+      - service: persistent_notification.create
+        data:
+          title: "EOS EV: laden gestart"
+          message: >
+            EV laden gestart in goedkoopste venster
+            {{ states('sensor.eos_ev_smart_window_start') }}–{{ states('sensor.eos_ev_smart_window_end') }}
+            ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh).
+            Stroom: {{ states('input_number.eos_ev_max_current_a') | int }}A
+            ({{ (states('input_number.eos_ev_max_current_a') | float * 230 / 1000) | round(1) }} kW).
+          notification_id: eos_ev_smart
+
+  # ── Duur tarief: stroom terugschroeven naar minimum ───────────
+  - id: eos_ev_expensive_throttle
+    alias: "EOS EV: laadstroom beperken bij duur tarief"
+    trigger:
+      - platform: state
+        entity_id: sensor.eos_tariff_level
+        to: "duur"
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_ev_smart_charge_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.eos_peblar_charging
+        state: "on"
+    action:
+      - service: number.set_value
+        target: {entity_id: number.peblar_ev_charger_laadlimiet}
+        data: {value: "{{ states('input_number.eos_ev_min_current_a') | int(6) }}"}
+      - service: persistent_notification.create
+        data:
+          title: "EOS EV: stroom beperkt"
+          message: >
+            Duur tarief ({{ states('sensor.eos_tariff_eur_kwh') }} €/kWh) —
+            EV laadstroom teruggebracht naar {{ states('input_number.eos_ev_min_current_a') | int }}A
+            ({{ (states('input_number.eos_ev_min_current_a') | float * 230 / 1000) | round(1) }} kW).
+            Goedkoper laden vanaf {{ states('sensor.eos_ev_smart_window_start') }}.
+          notification_id: eos_ev_throttle
+
+  # ── Tarief normaal/goedkoop: stroom herstellen ────────────────
+  - id: eos_ev_restore_current
+    alias: "EOS EV: laadstroom herstellen na duur tarief"
+    trigger:
+      - platform: state
+        entity_id: sensor.eos_tariff_level
+        to:
+          - "goedkoop"
+          - "normaal"
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_ev_smart_charge_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.eos_peblar_charging
+        state: "on"
+      - condition: template
+        value_template: >
+          {{ states('number.peblar_ev_charger_laadlimiet') | int(16)
+             < states('input_number.eos_ev_max_current_a') | int(16) }}
+    action:
+      - service: number.set_value
+        target: {entity_id: number.peblar_ev_charger_laadlimiet}
+        data: {value: "{{ states('input_number.eos_ev_max_current_a') | int(16) }}"}
+      - service: persistent_notification.dismiss
+        data: {notification_id: eos_ev_throttle}
+
+  # ── Alert: laden op duur tarief zonder EOS throttle ──────────
   - id: eos_ev_expensive_alert
-    alias: "EOS EV: waarschuwing laden tijdens duur tarief"
+    alias: "EOS EV: waarschuwing laden op duur tarief"
     trigger:
       - platform: state
         entity_id: binary_sensor.eos_ev_expensive_charge_alert
@@ -194,21 +326,21 @@ automation:
     action:
       - service: persistent_notification.create
         data:
-          title: "EOS EV: laden tijdens duur tarief"
+          title: "EOS EV: laden op duur tarief"
           message: >
-            EV laadt op duur tarief ({{ states('sensor.eos_tariff_eur_kwh') }} €/kWh).
+            EV laadt met {{ states('number.peblar_ev_charger_laadlimiet') | int }}A
+            op duur tarief ({{ states('sensor.eos_tariff_eur_kwh') }} €/kWh).
+            Sessie-energie: {{ states('sensor.peblar_ev_charger_sessie_energie') | round(2) }} kWh.
             Goedkoper venster: {{ states('sensor.eos_ev_smart_window_start') }}–{{ states('sensor.eos_ev_smart_window_end') }}
             ({{ states('sensor.eos_ev_smart_window_avg_price') }} €/kWh).
-            Batterij SoC: {{ states('sensor.eos_battery_soc_estimate_pct') }}%.
           notification_id: eos_ev_expensive_alert
 
   - id: eos_ev_expensive_alert_clear
-    alias: "EOS EV: waarschuwing wissen als tarief daalt"
+    alias: "EOS EV: waarschuwing wissen als alert verdwijnt"
     trigger:
       - platform: state
         entity_id: binary_sensor.eos_ev_expensive_charge_alert
         to: "off"
     action:
       - service: persistent_notification.dismiss
-        data:
-          notification_id: eos_ev_expensive_alert
+        data: {notification_id: eos_ev_expensive_alert}

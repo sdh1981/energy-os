@@ -640,18 +640,39 @@ views:
           - entity: sensor.eos_kpi_self_consumption_pct
             name: "Zelfverbruik %"
 
-      # ── M4: EV slim laden ───────────────────────────────
+      # ── M4: EV slim laden (Peblar) ──────────────────────
       - type: entities
-        title: "EV slim laden"
+        title: "EV slim laden (Peblar)"
         entities:
           - entity: input_boolean.eos_ev_smart_charge_enabled
             name: "Slim laden aan"
             icon: mdi:ev-station
-          - entity: binary_sensor.eos_ev_charging
-            name: "EV laadt nu"
+          - entity: input_boolean.eos_ev_auto_start_enabled
+            name: "Auto-start in goedkoop venster"
+            icon: mdi:play-circle-outline
+          - type: divider
+          - entity: sensor.peblar_ev_charger_status
+            name: "Peblar status"
+            icon: mdi:ev-plug-type2
+          - entity: binary_sensor.eos_peblar_connected
+            name: "Auto aangesloten"
+            icon: mdi:car-electric
+          - entity: binary_sensor.eos_peblar_charging
+            name: "Auto laadt nu"
+            icon: mdi:battery-charging
+          - entity: number.peblar_ev_charger_laadlimiet
+            name: "Huidig laadlimiet (A)"
+            icon: mdi:current-ac
+          - entity: sensor.peblar_ev_charger_sessie_energie
+            name: "Sessie energie (kWh)"
+            icon: mdi:lightning-bolt
+          - type: divider
           - entity: sensor.eos_ev_charge_advice
             name: "Laadadvies"
             icon: mdi:car-electric
+          - entity: binary_sensor.eos_ev_smart_window_active
+            name: "Goedkoop venster actief"
+            icon: mdi:clock-check-outline
           - entity: sensor.eos_ev_smart_window_start
             name: "Goedkoop venster start"
           - entity: sensor.eos_ev_smart_window_end
@@ -662,8 +683,12 @@ views:
             name: "Laden op duur tarief"
             icon: mdi:alert-circle
           - type: divider
-          - entity: input_number.eos_ev_charge_power_kw
-            name: "Laadvermogen (kW)"
+          - entity: input_number.eos_ev_max_current_a
+            name: "Max laadstroom (A)"
+            icon: mdi:current-ac
+          - entity: input_number.eos_ev_min_current_a
+            name: "Min stroom bij duur tarief (A)"
+            icon: mdi:current-ac
           - entity: input_number.eos_ev_charge_hours_target
             name: "Benodigde laadtijd (uur)"
 
