@@ -58,6 +58,60 @@ input_number:
     mode: slider
 
 template:
+  # ─── Load balancer: doelstroom op basis van netbelasting + tarief ────
+  # Triggert elke 30 seconden en bij tariefswijziging zodat de stroom
+  # snel wordt aangepast. Aanname: Peblar is 3-fase (trekt ev_current
+  # uit L1, L2 én L3 gelijktijdig).
+  #
+  # Limieten uit EnergyOS:
+  #   eos_grid_phase_limit_w  → max W per fase (bijv. 5750 W = 25A × 230V)
+  #   eos_grid_hard_limit_w   → max W totaal netinvoer (piekbeveiliging)
+  #
+  # Berekening:
+  #   huislast_fase = max(L1, L2, L3) - ev_stroom_bijdrage_per_fase
+  #   ruimte_fase_a = (fase_limiet - huislast_fase) / 230
+  #   huislast_totaal = grid_totaal - ev_stroom × 230 × 3
+  #   ruimte_totaal_a = (hard_limiet - huislast_totaal) / (230 × 3)
+  #   tarief_max_a = min_a bij duur tarief, max_a anders
+  #   doel_a = clamp(min(ruimte_fase_a, ruimte_totaal_a, tarief_max_a), min_a, max_a)
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+      - platform: state
+        entity_id: sensor.eos_tariff_level
+      - platform: homeassistant
+        event: start
+    sensor:
+      - name: "eos_ev_load_balance_current_a"
+        unique_id: eos_ev_load_balance_current_a
+        unit_of_measurement: "A"
+        icon: mdi:scale-balance
+        state: >
+          {% set min_a      = states('input_number.eos_ev_min_current_a') | int(6) %}
+          {% set max_a      = states('input_number.eos_ev_max_current_a') | int(16) %}
+          {% set charging   = is_state('binary_sensor.eos_peblar_charging', 'on') %}
+          {% set ev_now_a   = states('number.peblar_ev_charger_laadlimiet') | int(0) %}
+          {% set ev_pp_w    = ev_now_a * 230 if charging else 0 %}
+
+          {# Per-fase headroom #}
+          {% set l1         = states('sensor.eos_grid_power_l1_w') | float(0) %}
+          {% set l2         = states('sensor.eos_grid_power_l2_w') | float(0) %}
+          {% set l3         = states('sensor.eos_grid_power_l3_w') | float(0) %}
+          {% set house_max  = ([l1 - ev_pp_w, l2 - ev_pp_w, l3 - ev_pp_w] | max) %}
+          {% set phase_lim  = states('input_number.eos_grid_phase_limit_w') | float(5750) %}
+          {% set room_ph_a  = ((phase_lim - house_max) / 230) | int %}
+
+          {# Totaal netinvoer headroom #}
+          {% set grid_tot   = states('sensor.eos_grid_power_w') | float(0) %}
+          {% set house_tot  = grid_tot - (ev_now_a * 230 * 3 if charging else 0) %}
+          {% set hard_lim   = states('input_number.eos_grid_hard_limit_w') | float(17250) %}
+          {% set room_tot_a = ((hard_lim - house_tot) / (230 * 3)) | int %}
+
+          {# Tarief: beperk tot min_a bij duur, anders max_a #}
+          {% set tarief_max = min_a if states('sensor.eos_tariff_level') == 'duur' else max_a %}
+
+          {{ [[room_ph_a, room_tot_a, tarief_max] | min, min_a] | max }}
+
   - trigger:
       - platform: time_pattern
         minutes: "/15"
@@ -219,6 +273,35 @@ template:
           {{ charging and level == 'duur' and curr_lim > min_a }}
 
 automation:
+  # ── Load balancer: laadstroom bijsturen op basis van netbelasting ─
+  # Loopt elke 30s via sensor.eos_ev_load_balance_current_a en past
+  # number.peblar_ev_charger_laadlimiet aan zodra het doel ≥1A afwijkt.
+  # Vervangt aparte throttle/restore automaties bij tariefswijziging niet —
+  # die reageren direct; de load balancer corrigeert binnen 30s daarna.
+  - id: eos_ev_load_balancer
+    alias: "EOS EV: laadbalancer — stroom bijsturen op netbelasting"
+    trigger:
+      - platform: state
+        entity_id: sensor.eos_ev_load_balance_current_a
+    condition:
+      - condition: state
+        entity_id: input_boolean.eos_ev_smart_charge_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.eos_peblar_charging
+        state: "on"
+    action:
+      - variables:
+          doel: "{{ states('sensor.eos_ev_load_balance_current_a') | int(6) }}"
+          huidig: "{{ states('number.peblar_ev_charger_laadlimiet') | int(0) }}"
+      - if:
+          - condition: template
+            value_template: "{{ (doel - huidig) | abs >= 1 }}"
+        then:
+          - service: number.set_value
+            target: {entity_id: number.peblar_ev_charger_laadlimiet}
+            data: {value: "{{ doel }}"}
+
   # ── Goedkoop venster start: Peblar aanzetten op max stroom ────
   - id: eos_ev_smart_window_start
     alias: "EOS EV: start laden bij goedkoop venster"
@@ -255,61 +338,6 @@ automation:
             Stroom: {{ states('input_number.eos_ev_max_current_a') | int }}A
             ({{ (states('input_number.eos_ev_max_current_a') | float * 230 / 1000) | round(1) }} kW).
           notification_id: eos_ev_smart
-
-  # ── Duur tarief: stroom terugschroeven naar minimum ───────────
-  - id: eos_ev_expensive_throttle
-    alias: "EOS EV: laadstroom beperken bij duur tarief"
-    trigger:
-      - platform: state
-        entity_id: sensor.eos_tariff_level
-        to: "duur"
-    condition:
-      - condition: state
-        entity_id: input_boolean.eos_ev_smart_charge_enabled
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.eos_peblar_charging
-        state: "on"
-    action:
-      - service: number.set_value
-        target: {entity_id: number.peblar_ev_charger_laadlimiet}
-        data: {value: "{{ states('input_number.eos_ev_min_current_a') | int(6) }}"}
-      - service: persistent_notification.create
-        data:
-          title: "EOS EV: stroom beperkt"
-          message: >
-            Duur tarief ({{ states('sensor.eos_tariff_eur_kwh') }} €/kWh) —
-            EV laadstroom teruggebracht naar {{ states('input_number.eos_ev_min_current_a') | int }}A
-            ({{ (states('input_number.eos_ev_min_current_a') | float * 230 / 1000) | round(1) }} kW).
-            Goedkoper laden vanaf {{ states('sensor.eos_ev_smart_window_start') }}.
-          notification_id: eos_ev_throttle
-
-  # ── Tarief normaal/goedkoop: stroom herstellen ────────────────
-  - id: eos_ev_restore_current
-    alias: "EOS EV: laadstroom herstellen na duur tarief"
-    trigger:
-      - platform: state
-        entity_id: sensor.eos_tariff_level
-        to:
-          - "goedkoop"
-          - "normaal"
-    condition:
-      - condition: state
-        entity_id: input_boolean.eos_ev_smart_charge_enabled
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.eos_peblar_charging
-        state: "on"
-      - condition: template
-        value_template: >
-          {{ states('number.peblar_ev_charger_laadlimiet') | int(16)
-             < states('input_number.eos_ev_max_current_a') | int(16) }}
-    action:
-      - service: number.set_value
-        target: {entity_id: number.peblar_ev_charger_laadlimiet}
-        data: {value: "{{ states('input_number.eos_ev_max_current_a') | int(16) }}"}
-      - service: persistent_notification.dismiss
-        data: {notification_id: eos_ev_throttle}
 
   # ── Alert: laden op duur tarief zonder EOS throttle ──────────
   - id: eos_ev_expensive_alert

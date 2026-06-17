@@ -660,6 +660,9 @@ views:
           - entity: binary_sensor.eos_peblar_charging
             name: "Auto laadt nu"
             icon: mdi:battery-charging
+          - entity: sensor.eos_ev_load_balance_current_a
+            name: "Load balancer doel (A)"
+            icon: mdi:scale-balance
           - entity: number.peblar_ev_charger_laadlimiet
             name: "Huidig laadlimiet (A)"
             icon: mdi:current-ac
