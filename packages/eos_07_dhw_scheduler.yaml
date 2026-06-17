@@ -19,6 +19,10 @@ input_boolean:
     name: "EOS DHW slim inplannen"
     icon: mdi:calendar-clock
 
+  eos_dhw_scheduler_max_price_enabled:
+    name: "EOS DHW max prijs beperking"
+    icon: mdi:cash-lock
+
 input_number:
   eos_dhw_scheduler_window_h:
     name: "EOS DHW scheduler venstergrootte (uur)"
@@ -176,8 +180,9 @@ automation:
         state: "True"
       - condition: template
         value_template: >
-          {{ states('sensor.eos_dhw_scheduled_slot_avg_price') | float(99)
-             <= states('input_number.eos_dhw_scheduler_max_price_eur') | float(0.25) }}
+          {{ not is_state('input_boolean.eos_dhw_scheduler_max_price_enabled', 'on')
+             or states('sensor.eos_dhw_scheduled_slot_avg_price') | float(99)
+             <= states('input_number.eos_dhw_scheduler_max_price_eur') | float(0.10) }}
     action:
       - service: input_boolean.turn_on
         target: {entity_id: input_boolean.eos_dhw_solar_boost_active}

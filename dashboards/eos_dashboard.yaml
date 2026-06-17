@@ -610,6 +610,9 @@ views:
             icon: mdi:calendar-clock
           - entity: input_number.eos_dhw_scheduler_window_h
             name: "Venstergrootte (uur)"
+          - entity: input_boolean.eos_dhw_scheduler_max_price_enabled
+            name: "Max prijs beperking aan"
+            icon: mdi:cash-lock
           - entity: input_number.eos_dhw_scheduler_max_price_eur
             name: "Max prijs voor activatie (€/kWh)"
             icon: mdi:currency-eur
