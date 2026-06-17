@@ -644,6 +644,10 @@ views:
       - type: entities
         title: "EV slim laden (Peblar)"
         entities:
+          - entity: input_boolean.eos_ev_charge_now_override
+            name: "⚡ Laad nu (override)"
+            icon: mdi:ev-plug-type2
+          - type: divider
           - entity: input_boolean.eos_ev_smart_charge_enabled
             name: "Slim laden aan"
             icon: mdi:ev-station

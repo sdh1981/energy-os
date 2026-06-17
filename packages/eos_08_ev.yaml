@@ -27,6 +27,10 @@ input_boolean:
     name: "EOS EV automatisch starten in goedkoop venster"
     icon: mdi:play-circle-outline
 
+  eos_ev_charge_now_override:
+    name: "EOS EV laad nu (override)"
+    icon: mdi:ev-plug-type2
+
 input_number:
   eos_ev_charge_hours_target:
     name: "EOS EV benodigde laadtijd (uur)"
@@ -107,8 +111,9 @@ template:
           {% set hard_lim   = states('input_number.eos_grid_hard_limit_w') | float(17250) %}
           {% set room_tot_a = ((hard_lim - house_tot) / (230 * 3)) | int %}
 
-          {# Tarief: beperk tot min_a bij duur, anders max_a #}
-          {% set tarief_max = min_a if states('sensor.eos_tariff_level') == 'duur' else max_a %}
+          {# Tarief: beperk tot min_a bij duur tarief — tenzij override aan is #}
+          {% set override   = is_state('input_boolean.eos_ev_charge_now_override', 'on') %}
+          {% set tarief_max = max_a if override else (min_a if states('sensor.eos_tariff_level') == 'duur' else max_a) %}
 
           {{ [[room_ph_a, room_tot_a, tarief_max] | min, min_a] | max }}
 
@@ -301,6 +306,51 @@ automation:
           - service: number.set_value
             target: {entity_id: number.peblar_ev_charger_laadlimiet}
             data: {value: "{{ doel }}"}
+
+  # ── Override: laad nu — bypass tarief, fasegrenzen blijven actief ─
+  - id: eos_ev_charge_now_on
+    alias: "EOS EV: override laad nu — starten"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.eos_ev_charge_now_override
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.eos_peblar_connected
+        state: "on"
+    action:
+      - service: switch.turn_on
+        target: {entity_id: switch.peblar_ev_charger_opladen}
+      - service: number.set_value
+        target: {entity_id: number.peblar_ev_charger_laadlimiet}
+        data: {value: "{{ states('sensor.eos_ev_load_balance_current_a') | int(6) }}"}
+      - service: persistent_notification.create
+        data:
+          title: "EOS EV: override actief"
+          message: >
+            Laden gestart via override (tariefvenster genegeerd).
+            Laadstroom: {{ states('sensor.eos_ev_load_balance_current_a') | int }}A
+            ({{ (states('sensor.eos_ev_load_balance_current_a') | float * 230 / 1000) | round(1) }} kW) —
+            fasegrenzen ({{ states('input_number.eos_grid_phase_limit_w') | int }}W) blijven actief.
+            Huidig tarief: {{ states('sensor.eos_tariff_eur_kwh') }} €/kWh.
+          notification_id: eos_ev_override
+
+  - id: eos_ev_charge_now_off
+    alias: "EOS EV: override laad nu — stoppen"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.eos_ev_charge_now_override
+        to: "off"
+      - platform: state
+        entity_id: binary_sensor.eos_peblar_connected
+        to: "off"
+    action:
+      - service: input_boolean.turn_off
+        target: {entity_id: input_boolean.eos_ev_charge_now_override}
+      - service: switch.turn_off
+        target: {entity_id: switch.peblar_ev_charger_opladen}
+      - service: persistent_notification.dismiss
+        data: {notification_id: eos_ev_override}
 
   # ── Goedkoop venster start: Peblar aanzetten op max stroom ────
   - id: eos_ev_smart_window_start
